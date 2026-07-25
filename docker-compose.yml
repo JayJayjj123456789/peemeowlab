@@ -1,0 +1,50 @@
+﻿# JaiKrajok — team07 (Phase 1: LINE-only, no frontend, no DB yet)
+#
+# base = 20000 + (7 - 1) * 10 = 20060
+#   20060 -> reserved for frontend (not used yet)
+#   20061 -> api  (LINE webhook + health)
+#
+# TEAM / BASE / BASE_1 are injected by GitLab CI variables.
+name: ${TEAM:-team07}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
+x-common: &common
+  restart: unless-stopped
+  logging: *logging
+  networks: [app]
+
+services:
+  api:
+    <<: *common
+    build: ./api
+    ports:
+      - "127.0.0.1:${BASE_1:-20061}:8000"
+    env_file:
+      - .env
+    environment:
+      ROOT_PATH: /api
+      APP_ENV: production
+      LOG_LEVEL: INFO
+      TEAM: ${TEAM:-team07}
+    volumes:
+      - /data/hack/${TEAM:-team07}/uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+
+networks:
+  app:
+    driver: bridge

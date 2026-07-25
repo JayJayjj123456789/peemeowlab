@@ -1,0 +1,122 @@
+﻿# ============================================================
+#  .gitlab-ci.yml — JaiKrajok (PeeMeowLab) / team07
+#
+#  base = 20000 + (7 - 1) * 10
+#     team07 -> BASE 20060  BASE_1 20061
+# ============================================================
+
+variables:
+  TEAM:   "team07"
+  BASE:   "20060"
+  BASE_1: "20061"
+
+stages: [check, deploy, ops]
+
+default:
+  image: docker:27.3.1
+  before_script:
+    - docker compose version >/dev/null 2>&1 || apk add --no-cache docker-cli-compose
+    - apk add --no-cache curl bash >/dev/null
+    - echo "TEAM=$TEAM  fe=$BASE  api=$BASE_1"
+
+# ------------------------------------------------------------
+#  Validate compose against hackathon rules
+# ------------------------------------------------------------
+check:
+  stage: check
+  script:
+    - |
+      LO=$BASE; HI=$((BASE+9)); FAIL=0
+
+      echo "== port binding =="
+      while read -r line; do
+        case "$line" in
+          *'${BASE'*|*'$BASE'*) echo "  ok (variable) $line" ;;
+          *127.0.0.1:*)
+            p=$(echo "$line" | sed -n 's/.*127\.0\.0\.1:\([0-9]\+\):.*/\1/p')
+            if [ -n "$p" ] && { [ "$p" -lt "$LO" ] || [ "$p" -gt "$HI" ]; }; then
+              echo "  FAIL port $p outside $TEAM range ($LO-$HI)"; FAIL=1
+            else echo "  ok $line"; fi ;;
+          *) echo "  FAIL not bound to 127.0.0.1 -> $line"; FAIL=1 ;;
+        esac
+      done < <(grep -E '^\s*-\s*"?[0-9.$][^:]*:[0-9$]' docker-compose.yml || true)
+
+      echo "== bind mount =="
+      for m in $(grep -oE '^\s*-\s*[./][^:]*:' docker-compose.yml | sed 's/^\s*-\s*//; s/:$//' || true); do
+        case "$m" in
+          */var/run/docker.sock*) echo "  FAIL docker.sock not allowed"; FAIL=1 ;;
+          ./*|../*) echo "  FAIL relative bind mount: $m"; FAIL=1 ;;
+          /data/hack/*) echo "  ok $m" ;;
+          /*) echo "  FAIL bind mount outside /data/hack: $m"; FAIL=1 ;;
+        esac
+      done
+
+      echo "== other =="
+      grep -q 'memory:'      docker-compose.yml || { echo "  FAIL no memory limit"; FAIL=1; }
+      grep -q 'healthcheck:' docker-compose.yml || { echo "  FAIL api needs healthcheck"; FAIL=1; }
+      grep -q 'max-size'     docker-compose.yml || { echo "  FAIL no logging max-size"; FAIL=1; }
+
+      [ $FAIL -eq 0 ] && echo "all checks passed" || { echo "fix the FAIL lines above"; exit 1; }
+
+# ------------------------------------------------------------
+#  Deploy (main only)
+# ------------------------------------------------------------
+deploy:
+  stage: deploy
+  timeout: 20m
+  interruptible: true
+  environment:
+    name: $TEAM
+    url: https://$TEAM.aiforthai.in.th
+  script:
+    # secrets come from CI/CD Variables prefixed with APP_ (set them Masked)
+    - printenv | grep '^APP_' > .env || true
+    - docker compose -p "$TEAM" up -d --build --remove-orphans
+    - |
+      echo "waiting for healthcheck..."
+      for i in $(seq 1 40); do
+        st=$(docker inspect -f '{{.State.Health.Status}}' "${TEAM}-api-1" 2>/dev/null || echo none)
+        [ "$st" = "healthy" ] && { echo "api healthy"; break; }
+        sleep 5
+      done
+      docker compose -p "$TEAM" ps
+    - curl -fsS "http://127.0.0.1:${BASE_1}/health" && echo " <- /health OK"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# ============================================================
+#  Manual ops jobs (used instead of SSH)
+# ============================================================
+.ops: &ops
+  stage: ops
+  when: manual
+  allow_failure: true
+  interruptible: false
+
+logs:
+  <<: *ops
+  script: [docker compose -p "$TEAM" logs --tail=400 --timestamps --no-color]
+
+ps:
+  <<: *ops
+  script:
+    - docker compose -p "$TEAM" ps
+    - docker stats --no-stream $(docker compose -p "$TEAM" ps -q) || true
+
+restart:
+  <<: *ops
+  script:
+    - docker compose -p "$TEAM" restart
+    - docker compose -p "$TEAM" ps
+
+smoke-ai:
+  <<: *ops
+  script:
+    - docker compose -p "$TEAM" exec -T api python scripts/test_aiforthai_apis.py
+
+shell-cmd:
+  <<: *ops
+  variables:
+    SERVICE: api
+    CMD: "python -c 'import sys; print(sys.version)'"
+  script: [docker compose -p "$TEAM" exec -T "$SERVICE" sh -lc "$CMD"]

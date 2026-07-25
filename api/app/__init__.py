@@ -1,0 +1,1 @@
+﻿"""JaiKrajok application package."""
