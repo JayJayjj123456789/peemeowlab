@@ -23,6 +23,7 @@ services:
     <<: *common
     build: ./api
     ports:
+      - "127.0.0.1:${BASE:-20060}:8000"
       - "127.0.0.1:${BASE_1:-20061}:8000"
     env_file:
       - .env

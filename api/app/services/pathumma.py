@@ -78,27 +78,6 @@ async def generate_reply(user_text: str, *, emotion_hint: str | None = None) -> 
         return ServiceResult(service="pathumma", ok=False, error=str(exc))
 
 
-def _generate_fallback_reply(user_text: str, emotion_hint: str | None) -> str:
-    """Friendly fallback until Pathumma access is granted."""
-    greetings = ["สวัสดี", "หวัดดี", "ดีจ้า", "hello", "hi"]
-    stressed = ["เครียด", "stress", "เหนื่อย", "tired", "ท้อ"]
-    homework = ["การบ้าน", "งาน", "ข้อสอบ", "สอบ", "เรียน"]
-
-    lower_text = user_text.lower()
-
-    if any(g in lower_text for g in greetings):
-        return "สวัสดีค่ะ! ยินดีที่ได้รู้จักนะคะ 😊 มีอะไรให้ช่วยเรื่องการเรียนไหมคะ?"
-
-    if any(s in lower_text for s in stressed):
-        return "เข้าใจความรู้สึกเลยค่ะ 💙 ลองพักสักนิดแล้วค่อยกลับมาทำต่อนะคะ คุณทำได้แน่นอน!"
-
-    if any(h in lower_text for h in homework):
-        return "การบ้านเยอะใช่ไหมคะ? ลองแบ่งเป็นส่วนเล็กๆ ทำทีละอย่างน่าจะช่วยได้นะคะ ขอให้สู้ๆ! 💪"
-
-    # Default
-    return "ได้เลยค่ะ! พร้อมช่วยเรื่องการเรียนเสมอ 📚 อยากคุยเรื่องอะไรดีคะ?"
-
-
 def _extract_text(raw: dict) -> str:
     if not isinstance(raw, dict):
         return str(raw)

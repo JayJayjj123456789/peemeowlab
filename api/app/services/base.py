@@ -19,4 +19,5 @@ class ServiceResult(BaseModel):
     text: str | None = None
     error: str | None = None
     sentiment: SentimentResult | None = None
+    data: bytes | None = None
     raw: dict[str, Any] = Field(default_factory=dict)
