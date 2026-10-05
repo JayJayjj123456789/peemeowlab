@@ -87,7 +87,8 @@ export async function exportUserData(req, res) {
       data,
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    console.error("[user-data] op failed:", err.message);
+    return res.status(500).json({ error: "Operation failed" });
   }
 }
 
@@ -131,7 +132,8 @@ export async function deleteUserData(req, res) {
 
     return res.status(200).json({ ok: true, deleted });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    console.error("[user-data] op failed:", err.message);
+    return res.status(500).json({ error: "Operation failed" });
   }
 }
 

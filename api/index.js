@@ -74,7 +74,8 @@ app.get("/db-health", async (_req, res) => {
     const result = await pool.query("SELECT COUNT(*) AS n FROM db_health");
     return res.json({ status: "ok", tables: Number(result.rows[0]?.n || 0) });
   } catch (err) {
-    return res.status(503).json({ status: "degraded", error: err?.message });
+    console.error("[health] degraded:", err?.message);
+    return res.status(503).json({ status: "degraded" });
   }
 });
 

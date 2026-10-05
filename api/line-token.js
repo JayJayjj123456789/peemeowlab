@@ -55,7 +55,8 @@ export default async function handler(req, res) {
 
       res.status(profileRes.status).json({ ...data, profile });
     } catch (err) {
-      res.status(500).json({ error: err.message || String(err) });
+      console.error("[line-token] exchange failed:", err.message);
+    res.status(500).json({ error: "Token exchange failed" });
     }
   });
 }

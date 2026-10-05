@@ -25,6 +25,7 @@ export default async function handler(req, res) {
   } catch (err) {
     const isTimeout = err?.name === "TimeoutError" || err?.name === "AbortError";
     console.error("[ptm-asr] upstream error:", err?.message);
-    res.status(504).json({ error: isTimeout ? "ptm-asr upstream timeout" : String(err?.message) });
+    if (!isTimeout) console.error("[ptm-asr] upstream error:", err?.message);
+    res.status(504).json({ error: isTimeout ? "ptm-asr upstream timeout" : "ptm-asr upstream error" });
   }
 }

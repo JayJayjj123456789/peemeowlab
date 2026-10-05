@@ -55,6 +55,9 @@ export default async function handler(req, res) {
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: { user, pass },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
 
     await transporter.sendMail({
@@ -72,6 +75,6 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     console.error("[send-otp] send failed:", err.message);
-    res.status(502).json({ error: "Email send failed", detail: err.message });
+    res.status(502).json({ error: "Email send failed" });
   }
 }

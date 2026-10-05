@@ -24,6 +24,7 @@ export default async function handler(req, res) {
     res.status(upstream.status).json(data);
   } catch (err) {
     const isTimeout = err?.name === "TimeoutError" || err?.name === "AbortError";
-    res.status(504).json({ error: isTimeout ? "pathumma upstream timeout" : String(err?.message) });
+    if (!isTimeout) console.error("[pathumma] upstream error:", err?.message);
+    res.status(504).json({ error: isTimeout ? "pathumma upstream timeout" : "pathumma upstream error" });
   }
 }

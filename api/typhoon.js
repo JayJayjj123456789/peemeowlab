@@ -25,6 +25,7 @@ export default async function handler(req, res) {
   } catch (err) {
     const isTimeout = err?.name === "TimeoutError" || err?.name === "AbortError";
     console.error("[typhoon] upstream error:", err?.message);
-    res.status(504).json({ error: isTimeout ? "Typhoon upstream timeout" : String(err?.message) });
+    if (!isTimeout) console.error("[typhoon] upstream error:", err?.message);
+    res.status(504).json({ error: isTimeout ? "Typhoon upstream timeout" : "Typhoon upstream error" });
   }
 }

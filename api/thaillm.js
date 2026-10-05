@@ -34,6 +34,7 @@ export default async function handler(req, res) {
     res.status(response.status).json(data);
   } catch (err) {
     const isTimeout = err?.name === "TimeoutError" || err?.name === "AbortError";
-    res.status(504).json({ error: isTimeout ? "ThaiLLM (TokenMind) timeout" : String(err?.message) });
+    if (!isTimeout) console.error("[thaillm] upstream error:", err?.message);
+    res.status(504).json({ error: isTimeout ? "ThaiLLM (TokenMind) timeout" : "ThaiLLM upstream error" });
   }
 }

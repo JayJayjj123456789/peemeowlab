@@ -51,7 +51,8 @@ export default async function handler(req, res) {
   try {
     await ensureTable();
   } catch (err) {
-    return res.status(500).json({ error: "DB init failed: " + err.message });
+    console.error("[history] DB init failed:", err.message);
+  return res.status(500).json({ error: "Database unavailable" });
   }
 
   // POST /api/history — save a web chat message (validated)
@@ -83,7 +84,8 @@ export default async function handler(req, res) {
       );
       return res.status(200).json({ ok: true });
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      console.error("[history] query failed:", err.message);
+    return res.status(500).json({ error: "Database unavailable" });
     }
   }
 
@@ -128,7 +130,8 @@ export default async function handler(req, res) {
 
       return res.status(200).json({ sessions: Array.from(sessionMap.values()) });
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      console.error("[history] query failed:", err.message);
+    return res.status(500).json({ error: "Database unavailable" });
     }
   }
 
