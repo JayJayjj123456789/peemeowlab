@@ -444,14 +444,14 @@ export function setCurrentUser(user: UserAccount | null) {
 /* ============ OTP VERIFICATION MODAL ============ */
 function OtpModal({
   email,
-  expectedOtp,
+  pendingRegistration,
   previewUrl,
   onVerifySuccess,
   onCancel,
   onResend,
 }: {
   email: string;
-  expectedOtp: string;
+  pendingRegistration: { email: string; passwordHash: string } | null;
   previewUrl?: string | null;
   onVerifySuccess: () => void;
   onCancel: () => void;
@@ -460,6 +460,7 @@ function OtpModal({
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [timer, setTimer] = useState(60);
   const [errorMsg, setErrorMsg] = useState("");
+  const [verifying, setVerifying] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -467,6 +468,36 @@ function OtpModal({
     const interval = setInterval(() => setTimer((prev) => (prev > 0 ? prev - 1 : 0)), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Verification is server-side — the browser never holds the expected code
+  const verifyCode = async (code: string) => {
+    setVerifying(true);
+    setErrorMsg("");
+    try {
+      const res = await fetch("/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        onVerifySuccess();
+      } else {
+        const reasons: Record<string, string> = {
+          expired: "รหัสหมดอายุ กรุณาขอรหัสใหม่",
+          too_many_attempts: "พยายามครบจำนวนครั้ง กรุณาขอรหัสใหม่",
+          not_found: "ไม่พบรหัส กรุณาขอรหัสใหม่",
+        };
+        setErrorMsg(reasons[data.error] || "รหัส OTP ไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง");
+        setDigits(["", "", "", "", "", ""]);
+        inputRefs.current[0]?.focus();
+      }
+    } catch {
+      setErrorMsg("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const handleChange = (index: number, val: string) => {
     setErrorMsg("");
@@ -480,14 +511,10 @@ function OtpModal({
       inputRefs.current[index + 1]?.focus();
     }
 
-    // Check if 6 digits complete
+    // 6 digits complete → verify with the server
     const code = newDigits.join("");
     if (code.length === 6) {
-      if (code === expectedOtp) {
-        onVerifySuccess();
-      } else {
-        setErrorMsg("รหัส OTP ไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง");
-      }
+      verifyCode(code);
     }
   };
 
@@ -502,11 +529,7 @@ function OtpModal({
     const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
     if (pasted.length === 6) {
       setDigits(pasted.split(""));
-      if (pasted === expectedOtp) {
-        onVerifySuccess();
-      } else {
-        setErrorMsg("รหัส OTP ไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง");
-      }
+      verifyCode(pasted);
     }
   };
 
@@ -567,14 +590,13 @@ function OtpModal({
         <button
           onClick={() => {
             const code = digits.join("");
-            if (code === expectedOtp) onVerifySuccess();
-            else setErrorMsg("รหัส OTP ไม่ถูกต้อง");
+            if (code.length === 6) verifyCode(code);
           }}
-          disabled={digits.join("").length < 6}
+          disabled={digits.join("").length < 6 || verifying}
           className="w-full py-3.5 rounded-full font-bold text-white text-sm mb-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
           style={{ backgroundColor: "#FF3366", boxShadow: "0 2px 14px rgba(255,51,102,0.3)" }}
         >
-          ยืนยันและเข้าสู่ระบบ
+          {verifying ? "กำลังตรวจสอบ..." : "ยืนยันและเข้าสู่ระบบ"}
         </button>
 
         <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
@@ -692,7 +714,7 @@ function LineOAuthModal({
 function LoginPage({ onNext: _onNext, onLoginSuccess }: { onNext: () => void; onLoginSuccess: (user: UserAccount) => void }) {
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [showLineModal, setShowLineModal] = useState(false);
-  const [pendingRegistration, setPendingRegistration] = useState<{ email: string; passwordHash: string; otpCode: string } | null>(null);
+  const [pendingRegistration, setPendingRegistration] = useState<{ email: string; passwordHash: string } | null>(null);
   const [otpPreviewUrl, setOtpPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -701,12 +723,7 @@ function LoginPage({ onNext: _onNext, onLoginSuccess }: { onNext: () => void; on
     gsap.fromTo(".login-form", { y: 20 }, { y: 0, duration: 0.8, ease: "back.out(1.2)", delay: 0.2 });
   }, []);
 
-  const generateOtpCode = () => {
-    const buf = new Uint32Array(1);
-    crypto.getRandomValues(buf);
-    return String(100000 + (buf[0] % 900000));
-  };
-
+  // OTP is generated + verified server-side; the client only tracks the pending signup
   const handleVerifyOtpSuccess = () => {
     if (!pendingRegistration) return;
     const users = getUsersList();
@@ -728,17 +745,16 @@ function LoginPage({ onNext: _onNext, onLoginSuccess }: { onNext: () => void; on
 
   const handleResendOtp = () => {
     if (!pendingRegistration) return;
-    const newOtp = generateOtpCode();
-    setPendingRegistration({ ...pendingRegistration, otpCode: newOtp });
     toast(`📧 กำลังส่งรหัส OTP ใหม่ไปที่ ${pendingRegistration.email}...`);
     fetch("/api/send-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: pendingRegistration.email, otp: newOtp }),
+      body: JSON.stringify({ email: pendingRegistration.email }),
     })
       .then((res) => res.json())
       .then((data) => {
         if (data.previewUrl) setOtpPreviewUrl(data.previewUrl);
+        if (data.dev_otp) toast(`[DEV] รหัส OTP: ${data.dev_otp}`);
         toast(`📧 ส่งรหัส OTP ใหม่ไปที่ ${pendingRegistration.email} สำเร็จแล้ว`);
       })
       .catch(() => {
@@ -977,7 +993,7 @@ function LoginPage({ onNext: _onNext, onLoginSuccess }: { onNext: () => void; on
       {showOtpModal && pendingRegistration && (
         <OtpModal
           email={pendingRegistration.email}
-          expectedOtp={pendingRegistration.otpCode}
+          pendingRegistration={pendingRegistration}
           previewUrl={otpPreviewUrl}
           onVerifySuccess={handleVerifyOtpSuccess}
           onCancel={() => {
@@ -1308,6 +1324,16 @@ export interface ChatSession {
   mood: string;
 }
 
+/* ============ API HELPERS ============ */
+// VITE_WEB_API_SECRET → sent as x-app-token on history calls.
+// Build without it → header omitted (matches the API's dev mode).
+export function getApiHeaders(): Record<string, string> {
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  const secret = import.meta.env.VITE_WEB_API_SECRET as string | undefined;
+  if (secret) h["x-app-token"] = secret;
+  return h;
+}
+
 /* ============ MAIN APP SHELL ============ */
 function AppShell({ currentUser, onLogout, age, guardianConsent }: { currentUser: UserAccount | null; onLogout?: () => void; age: string; guardianConsent: boolean }) {
   const userKey = currentUser ? currentUser.id : "guest";
@@ -1368,12 +1394,11 @@ function AppShell({ currentUser, onLogout, age, guardianConsent }: { currentUser
     const sess = sessionsRef2.current.find(s => s.id === sid);
     fetch("/api/history", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getApiHeaders(),
       body: JSON.stringify({
         line_user_id: uid,
         role,
         text: text.slice(0, 4000),
-        source: "web",
         session_id: sid,
         session_title: sess?.title || "สนทนาใหม่",
       }),
@@ -3568,7 +3593,9 @@ export default function App() {
       // Clear query params immediately from URL bar
       window.history.replaceState({}, "", window.location.pathname);
 
-      if (savedState && state && state !== savedState) {
+      // Fail-closed: state must exist AND match — a missing saved state
+      // (cleared sessionStorage, new tab) would otherwise silently pass
+      if (!savedState || !state || state !== savedState) {
         console.warn("LINE login state mismatch:", { state, savedState });
         toast.error("การยืนยันตัวตน LINE ไม่ถูกต้อง (State Mismatch)");
         return;
@@ -3576,7 +3603,8 @@ export default function App() {
       sessionStorage.removeItem("jaikrajok:line_state");
       sessionStorage.removeItem("jaikrajok:line_nonce");
 
-      const redirectUri = window.location.origin + window.location.pathname;
+      // Must exactly match the redirect_uri used in the authorize URL (origin + "/")
+      const redirectUri = window.location.origin + "/";
       toast("กำลังยืนยันตัวตนด้วย LINE...");
 
       fetch("/api/line-token", {
@@ -3610,7 +3638,9 @@ export default function App() {
 
             // Fetch shared LINE+Web history via Vercel serverless function (uses service key server-side)
             try {
-              const histRes = await fetch(`/api/history?line_user_id=${encodeURIComponent(profile.userId)}`);
+              const histRes = await fetch(`/api/history?line_user_id=${encodeURIComponent(profile.userId)}`, {
+                headers: getApiHeaders(),
+              });
               if (histRes.ok) {
                 const { sessions: dbSessions } = await histRes.json() as {
                   sessions: { session_id: string; session_title: string; messages: { role: string; text: string; source: string; created_at: string }[] }[]

@@ -4,7 +4,7 @@
 //           voice ASR, mood-streak escalation, trend Flex view,
 //           multi-session commands, 1323 support strip
 // ─────────────────────────────────────────────────────────────────────────────
-import { createHmac, randomUUID } from "crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import pg from "pg";
 import { encryptText, decryptText, hashId } from "./privacy.js";
 import { recordAlert } from "./notify.js";
@@ -32,7 +32,13 @@ const SYSTEM_PROMPT =
   "- รายการยาว ๆ หลายหัวข้อ";
 
 
-const CRISIS_KEYWORDS = ["ฆ่าตัวตาย", "อยากตาย", "ทำร้ายตัวเอง", "ไม่อยากอยู่", "ไม่มีค่า"];
+// Broadened Thai self-harm phrase list — substring match is intentional
+// (Thai has no word boundaries; false positives are safer than misses)
+const CRISIS_KEYWORDS = [
+  "ฆ่าตัวตาย", "อยากตาย", "อยากฆ่าตัว", "ทำร้ายตัวเอง", "ทำร้ายร่างกายตัวเอง",
+  "ไม่อยากอยู่", "ไม่อยากมีชีวิต", "อยากจบชีวิต", "จบชีวิต", "เบื่อชีวิต",
+  "อยู่ต่อไปไม่ไหว", "อยากหายไปจากโลกนี้", "หมดหวังอย่างแรง", "ไม่มีค่า",
+];
 
 const CRISIS_REPLY =
   "เราห่วงใยคุณมากนะ ตอนนี้คุณไม่ได้อยู่คนเดียว\n\n" +
@@ -229,8 +235,12 @@ function getRawBody(req) {
 
 function verifySignature(rawBody, sig, secret) {
   // LINE sends x-line-signature as base64(HMAC-SHA256(body, channel_secret))
+  if (!sig || typeof sig !== "string") return false;
   const expected = createHmac("sha256", secret).update(rawBody).digest("base64");
-  return sig === expected;
+  const a = Buffer.from(sig, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 /** Send one or more messages via LINE Reply API (max 5 messages). */
@@ -1345,11 +1355,12 @@ export default async function handler(req, res) {
 
   const rawBody = await getRawBody(req);
 
-  // Signature verification
+  // Signature verification — fail-closed: no secret configured = reject,
+  // otherwise an unset env var silently disables forgery protection
   const secret    = process.env.LINE_CHANNEL_SECRET;
   const signature = req.headers["x-line-signature"] || "";
-  if (secret && !verifySignature(rawBody, signature, secret)) {
-    console.warn("LINE signature mismatch — rejecting");
+  if (!secret || !verifySignature(rawBody, signature, secret)) {
+    console.warn("LINE signature mismatch or secret missing — rejecting");
     return res.status(401).json({ error: "Invalid signature" });
   }
 

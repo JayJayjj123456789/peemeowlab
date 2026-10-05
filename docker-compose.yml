@@ -70,6 +70,8 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://app:${TEAM:-team07}pass@db:5432/app
       SEARXNG_URL: "http://searxng:8080"
+      WEB_API_SECRET:              "${APP_WEB_API_SECRET:-}"
+      OTP_PEPPER:                  "${APP_OTP_PEPPER:-jkj}"
       TOKENMIND_API_KEY:           "${APP_TOKENMIND_API_KEY}"
       TYPHOON_ASR_KEY:             "${APP_TYPHOON_ASR_KEY}"
       LINE_CHANNEL_SECRET:         "${APP_LINE_CHANNEL_SECRET}"

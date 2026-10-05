@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     for await (const chunk of req) chunks.push(chunk);
     const rawBody = Buffer.concat(chunks);
 
-    const response = await fetch(`https://tokenmind.pathumma.in.th/v1${path}`, {
+    const response = await fetch(`https://tokenmind.abdul.in.th/v1${path}`, {
       method: req.method,
       headers: {
         // Forward original Content-Type (preserves multipart boundary)

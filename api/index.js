@@ -11,7 +11,7 @@ import typhoonHandler from "./typhoon.js";
 import thaillmHandler from "./thaillm.js";
 import ptmAsrHandler from "./ptm-asr.js";
 import lineTokenHandler from "./line-token.js";
-import sendOtpHandler from "./send-otp.js";
+import sendOtpHandler, { verifyOtp } from "./send-otp.js";
 import guardianEmailHandler from "./guardian-email.js";
 import adminDbHandler from "./admin-db.js";
 import { exportUserData, deleteUserData } from "./user-data.js";
@@ -116,6 +116,19 @@ app.post("/search", searchHandler);       // SearXNG primary + Tavily fallback
 app.all(["/thaillm", "/thaillm/*"], thaillmHandler);
 
 app.post("/send-otp", sendOtpHandler);
+
+// POST /verify-otp — server-side OTP verification (single-use, 10-min TTL,
+// 5 attempts). The client no longer decides what a valid code is.
+app.post("/verify-otp", (req, res) => {
+  const { email, code } = req.body ?? {};
+  if (!email || !code)
+    return res.status(400).json({ error: "Missing email or code" });
+  const reason = verifyOtp(String(email).toLowerCase(), String(code));
+  if (reason)
+    return res.status(401).json({ ok: false, error: reason });
+  res.status(200).json({ ok: true });
+});
+
 app.post("/guardian-email", guardianEmailHandler);
 
 // ── Admin DB inspection (read-only, secret-protected) ────────────────────────

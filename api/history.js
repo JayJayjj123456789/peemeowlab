@@ -24,9 +24,23 @@ async function ensureTable() {
   tableReady = true;
 }
 
+// Shared-secret gate — WEB_API_SECRET set → client must send x-app-token.
+// Unset → open (dev mode). Protects both reading others' history (ID
+// enumeration) and forging rows into victims' sessions.
+function checkAuth(req) {
+  const secret = process.env.WEB_API_SECRET;
+  if (!secret) return true;
+  return req.headers["x-app-token"] === secret;
+}
+
+const ALLOWED_ROLES = new Set(["user", "bot"]);
+const safeStr = (v, max) => (typeof v === "string" ? v.slice(0, max) : null);
+
 export default async function handler(req, res) {
   if (!process.env.DATABASE_URL)
     return res.status(500).json({ error: "DATABASE_URL not configured" });
+  if (!checkAuth(req))
+    return res.status(401).json({ error: "Unauthorized" });
 
   try {
     await ensureTable();
@@ -34,11 +48,16 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "DB init failed: " + err.message });
   }
 
-  // POST /api/history — save a web chat message
+  // POST /api/history — save a web chat message (validated)
   if (req.method === "POST") {
-    const { line_user_id, role, text, source, session_id, session_title } = req.body ?? {};
-    if (!line_user_id || !role || !text)
-      return res.status(400).json({ error: "Missing fields" });
+    const { line_user_id, role, text, session_id, session_title } = req.body ?? {};
+    const userId = safeStr(line_user_id, 128);
+    const msgText = safeStr(text, 4000);
+    if (!userId || !ALLOWED_ROLES.has(role) || !msgText)
+      return res.status(400).json({ error: "Invalid fields" });
+
+    const sid = safeStr(session_id, 128);
+    const stitle = safeStr(session_title, 128);
 
     try {
       await pool.query(
@@ -46,12 +65,12 @@ export default async function handler(req, res) {
            (line_user_id, role, text, source, session_id, session_title)
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [
-          hashId(line_user_id),                          // § anonymized — never raw
+          hashId(userId),                          // § anonymized — never raw
           role,
-          encryptText(String(text).slice(0, 4000)),      // § AES-256-GCM
-          source || "web",
-          session_id || null,
-          session_title || null,
+          encryptText(msgText),                    // § AES-256-GCM
+          "web",                                   // server-controlled, not client
+          sid,
+          stitle,
         ]
       );
       return res.status(200).json({ ok: true });
