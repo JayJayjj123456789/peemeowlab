@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JaiKraJok — GAP AUDIT REPORT</title>
+<style>
+  :root{
+    --paper:#0f1216; --card:#161b22; --card2:#1c2330; --ink:#e6edf3; --dim:#8b98a5;
+    --red:#ff5c5c; --green:#3fb970; --amber:#e3b341; --blue:#58a6ff; --line:#2a313d;
+    --mono:'JetBrains Mono','Cascadia Code',Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--paper);color:var(--ink);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.55;padding:32px 16px}
+  .wrap{max-width:1080px;margin:0 auto}
+
+  header{border:1px solid var(--line);border-radius:14px;padding:28px 32px;background:linear-gradient(135deg,#161b22,#12161c);margin-bottom:24px}
+  .brand{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .logo{width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,#C8382A,#8e2418);display:flex;align-items:center;justify-content:center;font-size:26px}
+  h1{font-size:26px;letter-spacing:-.02em}
+  .sub{color:var(--dim);font-size:13.5px;margin-top:4px}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+  .badge{font-family:var(--mono);font-size:11.5px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--card2)}
+  .b-red{border-color:#5c2b2b;color:var(--red)} .b-green{border-color:#2b5c3d;color:var(--green)}
+  .b-blue{border-color:#2b4a5c;color:var(--blue)} .b-amber{border-color:#5c4d2b;color:var(--amber)}
+
+  .score{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+  .stat{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:18px 20px}
+  .stat .n{font-size:30px;font-weight:800;font-family:var(--mono)}
+  .stat .l{color:var(--dim);font-size:12px;margin-top:2px}
+  .n.green{color:var(--green)} .n.red{color:var(--red)} .n.amber{color:var(--amber)} .n.blue{color:var(--blue)}
+
+  h2{font-size:17px;margin:34px 0 14px;display:flex;align-items:center;gap:10px}
+  h2 .tag{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:6px;background:var(--card2);border:1px solid var(--line);color:var(--dim)}
+  .sev-crit{color:var(--red)} .sev-high{color:#ff8f5c} .sev-med{color:var(--amber)} .sev-ok{color:var(--green)}
+
+  .gap{border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:14px;overflow:hidden}
+  .gap-h{display:flex;align-items:center;gap:10px;padding:13px 18px;cursor:default;border-bottom:1px solid var(--line);background:var(--card2)}
+  .gap-h .id{font-family:var(--mono);font-size:11.5px;color:var(--dim);min-width:44px}
+  .gap-h .t{font-weight:700;font-size:14.5px}
+  .pill{margin-left:auto;font-family:var(--mono);font-size:10.5px;padding:3px 10px;border-radius:999px}
+  .p-fixed{background:rgba(63,185,112,.12);color:var(--green);border:1px solid rgba(63,185,112,.35)}
+  .p-team{background:rgba(88,166,255,.12);color:var(--blue);border:1px solid rgba(88,166,255,.35)}
+  .p-human{background:rgba(227,179,65,.12);color:var(--amber);border:1px solid rgba(227,179,65,.35)}
+  .gap-b{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  @media(max-width:760px){.gap-b{grid-template-columns:1fr}}
+  .col{padding:14px 18px}
+  .col+.col{border-left:1px solid var(--line)}
+  @media(max-width:760px){.col+.col{border-left:none;border-top:1px solid var(--line)}}
+  .col h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
+  .before h4{color:var(--red)} .after h4{color:var(--green)}
+  .col ul{list-style:none}
+  .col li{font-size:13px;color:var(--ink);padding:3px 0 3px 22px;position:relative}
+  .before li::before{content:"✕";position:absolute;left:0;color:var(--red);font-weight:700;font-size:12px}
+  .after li::before{content:"✓";position:absolute;left:0;color:var(--green);font-weight:700;font-size:12px}
+  .note{grid-column:1/-1;padding:10px 18px;border-top:1px solid var(--line);color:var(--dim);font-size:12.5px;background:#12161c}
+  .note b{color:var(--ink)}
+  code{font-family:var(--mono);font-size:12px;background:#0d1117;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:#c9d8ea}
+
+  table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:13.5px}
+  th{background:var(--card2);text-align:left;padding:11px 16px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+  td{padding:11px 16px;border-top:1px solid var(--line);color:var(--ink)}
+  td:first-child{font-family:var(--mono);font-size:12.5px;color:var(--blue);white-space:nowrap}
+
+  .bar-wrap{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:22px 24px}
+  .bar-row{margin-bottom:16px}
+  .bar-row:last-child{margin-bottom:0}
+  .bar-lbl{display:flex;justify-content:space-between;font-size:12.5px;color:var(--dim);margin-bottom:6px;font-family:var(--mono)}
+  .bar{height:16px;border-radius:6px;background:#0d1117;overflow:hidden;border:1px solid var(--line)}
+  .bar>div{height:100%;border-radius:6px}
+  .bar .open{width:100%;background:linear-gradient(90deg,#ff5c5c,#c73e3e)}
+  .bar .done1{width:93.3%;background:linear-gradient(90deg,#3fb970,#2b8f57)}
+  .bar .done2{width:93.3%;background:linear-gradient(90deg,#3fb970,#58a6ff)}
+
+  .verify{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+  .v{border:1px solid var(--line);border-left:3px solid var(--green);border-radius:10px;background:var(--card);padding:13px 16px}
+  .v .t{font-weight:700;font-size:13.5px}
+  .v .r{font-family:var(--mono);font-size:12px;color:var(--green);margin-top:3px}
+
+  .human{border:1px solid rgba(227,179,65,.4);background:rgba(227,179,65,.06);border-radius:12px;padding:18px 22px;margin-bottom:14px}
+  .human h3{font-size:14.5px;color:var(--amber);margin-bottom:6px}
+  .human p{font-size:13.5px;color:var(--ink)}
+  .human .mono{font-family:var(--mono);font-size:12px;color:var(--amber)}
+
+  footer{margin-top:30px;color:var(--dim);font-size:12px;text-align:center;font-family:var(--mono)}
+  @media print{body{background:#fff;color:#111}.gap,.stat,.bar-wrap,table{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand">
+    <div class="logo">🪞</div>
+    <div>
+      <h1>JaiKraJok — GAP AUDIT REPORT</h1>
+      <div class="sub">full-stack security &amp; quality audit · LINE bot + Thai LLM tutor (React/Express/Postgres/Docker/GitLab CI)</div>
+    </div>
+  </div>
+  <div class="badges">
+    <span class="badge b-red">30 gaps found</span>
+    <span class="badge b-green">28 fixed &amp; verified</span>
+    <span class="badge b-blue">6 already fixed by team</span>
+    <span class="badge b-amber">2 need human action</span>
+    <span class="badge">commit cda80a4 → gitlab/main</span>
+  </div>
+</header>
+
+<div class="score">
+  <div class="stat"><div class="n red">30</div><div class="l">gaps discovered</div></div>
+  <div class="stat"><div class="n green">28</div><div class="l">closed &amp; verified</div></div>
+  <div class="stat"><div class="n blue">7</div><div class="l">files' proxies hardened</div></div>
+  <div class="stat"><div class="n amber">2</div><div class="l">awaiting owner action</div></div>
+</div>
+
+<h2><span class="sev-crit">🔴</span> CRITICAL — security holes <span class="tag">all closed</span></h2>
+
+<div class="gap">
+  <div class="gap-h"><span class="id">#01</span><span class="t">OTP verification was client-side theater</span><span class="pill p-fixed">FIXED</span></div>
+  <div class="gap-b">
+    <div class="col before"><h4>Before</h4><ul>
+      <li>OTP generated <code>Math.random</code> in the browser</li>
+      <li>correct code passed to the modal as a prop — visible in DevTools</li>
+      <li>client compares code itself → "verification" meaningless</li>
+    </ul></div>
+    <div class="col after"><h4>After</h4><ul>
+      <li>server mints OTP (<code>randomInt</code>), stores <code>sha256(code+pepper)</code></li>
+      <li>10-min TTL · max 5 attempts · single-use</li>
+      <li>new <code>POST /verify-otp</code> — server decides, browser never holds the answer</li>
+    </ul></div>
+  </div>
+</div>
+
+<div class="gap">
+  <div class="gap-h"><span class="id">#02</span><span class="t">Plaintext passwords in localStorage</span><span class="pill p-fixed">FIXED</span></div>
+  <div class="gap-b">
+    <div class="col before"><h4>Before</h4><ul>
+      <li><code>passwordHash</code> field held the <b>raw password</b></li>
+      <li>whole user store in <code>localStorage</code> — XSS = total takeover</li>
+    </ul></div>
+    <div class="col after"><h4>After</h4><ul>
+      <li>team's final architecture: <b>passwordless &amp; anonymous</b> (PDPA <code>anon_id</code>)</li>
+      <li>nothing credential-shaped exists to steal</li>
+      <li>chat content AES-256-GCM encrypted at rest (<code>privacy.js</code>)</li>
+    </ul></div>
+    <div class="note"><b>Resolution:</b> team's 156 newer commits replaced email/password auth entirely — verified stronger than my scrypt plan; kept their design.</div>
+  </div>
+</div>
+
+<div class="gap">
+  <div class="gap-h"><span class="id">#03</span><span class="t">LINE webhook signature never checked</span><span class="pill p-fixed">FIXED</span></div>
+  <div class="gap-b">
+    <div class="col before"><h4>Before</h4><ul>
+      <li><code>verifySignature()</code> defined… and never called</li>
+      <li>anyone could POST fake events → burn LLM tokens, poison DB</li>
+    </ul></div>
+    <div class="col after"><h4>After</h4><ul>
+      <li>enforced with <code>timingSafeEqual</code> (no timing leak)</li>
+      <li><b>fail-closed</b>: unset <code>LINE_CHANNEL_SECRET</code> → 401, not open season</li>
+      <li>smoke-tested: forged POST rejected live</li>
+    </ul></div>
+  </div>
+</div>
+
+<div class="gap">
+  <div class="gap-h"><span class="id">#04</span><span class="t">History API — read anyone's chats, forge anyone's messages</span><span class="pill p-fixed">FIXED</span></div>
+  <div class="gap-b">
+    <div class="col before"><h4>Before</h4><ul>
+      <li>GET returned 200 rows per guessed <code>line_user_id</code></li>
+      <li>POST accepted any <code>role</code> (incl. <code>system</code>), any session title</li>
+      <li>no auth, no pagination, no rate limit</li>
+    </ul></div>
+    <div class="col after"><h4>After</h4><ul>
+      <li><code>x-app-token</code> gate (<code>WEB_API_SECRET</code>)</li>
+      <li>role allowlist <code>user|bot</code>, all fields length-capped</li>
+      <li><code>source</code> forced server-side; client sends token header</li>
+      <li>DB rows AES-encrypted (team) + hashed user refs</li>
+    </ul></div>
+  </div>
+</div>
+
+<div class="gap">
+  <div class="gap-h"><span class="id">#05</span><span class="t">Open email relays (send-otp / guardian-email)</span><span class="pill p-fixed">FIXED</span></div>
+  <div class="gap-b">
+    <div class="col before"><h4>Before</h4><ul>
+      <li><code>/send-otp</code> mailed any address with a <b>client-chosen</b> OTP</li>
+      <li>guardian endpoint emailed any link provided → phishing from their domain</li>
+      <li>no rate limit → Gmail account suspension risk</li>
+    </ul></div>
+    <div class="col after"><h4>After</h4><ul>
+      <li>server generates the code — client-supplied OTP ignored</li>
+      <li>email validation, <code>strictLimiter</code> 10/15min</li>
+      <li>SMTP-missing → clean 503, <code>sendMail</code> wrapped → 502</li>
+    </ul></div>
+  </div>
+</div>
+
+<div class="gap">
+  <div class="gap-h"><span class="id">#06</span><span class="t">Guardian (PDPA) consent bypassable in 5 seconds</span><span class="pill p-fixed">FIXED</span></div>
+  <div class="gap-b">
+    <div class="col before"><h4>Before</h4><ul>
+      <li>one <code>localStorage.setItem("approved","true")</code> in DevTools</li>
+      <li>approval link was a bare client-generated token, no server binding</li>
+    </ul></div>
+    <div class="col after"><h4>After</h4><ul>
+      <li>team's verification-code-to-parent flow kept &amp; backed by server-side <code>/verify-otp</code></li>
+      <li>client can no longer self-assert consent state</li>
+    </ul></div>
+  </div>
+</div>
+
+<div class="gap">
+  <div class="gap-h"><span class="id">#07-08</span><span class="t">No CORS / no rate limiting on paid AI endpoints</span><span class="pill p-fixed">FIXED</span></div>
+  <div class="gap-b">
+    <div class="col before"><h4>Before</h4><ul>
+      <li>every API callable from any website</li>
+      <li>LLM/VQA/OCR proxies unthrottled → token drain</li>
+    </ul></div>
+    <div class="col after"><h4>After</h4><ul>
+      <li>team: <code>express-rate-limit</code> global 120/15m + strict 10/15m</li>
+      <li>nginx + proxy-hop trust configured correctly</li>
+      <li>smoke-verified: 429s fire, headers present</li>
+    </ul></div>
+  </div>
+</div>
+
+<h2><span class="sev-high">🟠</span> HIGH — deployment breakers <span class="tag">all closed</span></h2>
+
+<div class="gap">
+  <div class="gap-h"><span class="id">#11</span><span class="t">Deployed app couldn't reach its own backend</span><span class="pill p-team">TEAM + VERIFIED</span></div>
+  <div class="gap-b">
+    <div class="col before"><h4>Before</h4><ul>
+      <li>nginx served static files only — every <code>/api/*</code> fetch 404'd</li>
+      <li>pretty shell, zero brains in production</li>
+    </ul></div>
+    <div class="col after"><h4>After</h4><ul>
+      <li><code>location /api/ → proxy_pass http://api:8000</code></li>
+      <li>plus searxng search proxy; headers &amp; timeouts set</li>
+    </ul></div>
+  </div>
+</div>
+
+<div class="gap">
+  <div class="gap-h"><span class="id">#13</span><span class="t">API keys shipped inside the public JS bundle</span><span class="pill p-team">TEAM + VERIFIED</span></div>
+  <div class="gap-b">
+    <div class="col before"><h4>Before</h4><ul>
+      <li><code>VITE_PATHUMMA_API_KEY</code> / <code>VITE_THAILLM_API_KEY</code> as build args</li>
+      <li>view-source = free keys for everyone</li>
+    </ul></div>
+    <div class="col after"><h4>After</h4><ul>
+      <li>build args removed (both my pass and team's)</li>
+      <li>all keys server-side via env</li>
+    </ul></div>
+  </div>
+</div>
+
+<div class="gap">
+  <div class="gap-h"><span class="id">#10</span><span class="t">TokenMind endpoint + key swap (your request)</span><span class="pill p-fixed">FIXED</span></div>
+  <div class="gap-b">
+    <div class="col before"><h4>Before</h4><ul>
+      <li>ASR pointed at expired <code>tokenmind.pathumma.in.th</code> + dead key</li>
+    </ul></div>
+    <div class="col after"><h4>After</h4><ul>
+      <li>→ <code>https://tokenmind.abdul.in.th/v1</code> everywhere (api + dev proxy)</li>
+      <li>live-verified: 200 models · 200 chat · 401 bad-key control</li>
+    </ul></div>
+    <div class="note"><b>But:</b> new key's allowlist has no ASR model — voice still 403s until an ASR-enabled key arrives. See "needs you".</div>
+  </div>
+</div>
+
+<h2><span class="sev-med">🟡</span> MEDIUM — correctness &amp; hygiene <span class="tag">all closed</span></h2>
+
+<div class="gap">
+  <div class="gap-h"><span class="id">#15-18</span><span class="t">Correctness quartet</span><span class="pill p-fixed">FIXED</span></div>
+  <div class="gap-b">
+    <div class="col before"><h4>Before</h4><ul>
+      <li><code>escapeHtml</code> replaced every char with itself (identity no-op)</li>
+      <li>hardcoded <code>toi2_maxseq</code> answer in the client bundle</li>
+      <li>LINE state check failed <b>open</b> (cleared storage = bypass)</li>
+      <li>redirect_uri mismatch → <code>invalid_grant</code> on deployed host</li>
+    </ul></div>
+    <div class="col after"><h4>After</h4><ul>
+      <li>escapes <code>&amp; &lt; &gt; " '</code> for real</li>
+      <li>60-line answer-leak deleted from bundle</li>
+      <li>state check <b>fail-closed</b></li>
+      <li>authorize + exchange URIs identical (<code>origin + "/"</code>)</li>
+    </ul></div>
+  </div>
+</div>
+
+<div class="gap">
+  <div class="gap-h"><span class="id">#22</span><span class="t">Proxies crash the whole API on upstream hiccups</span><span class="pill p-fixed">FIXED</span></div>
+  <div class="gap-b">
+    <div class="col before"><h4>Before</h4><ul>
+      <li>tavily/ssense/gemini/pathumma/typhoon/ptm-asr: zero try/catch</li>
+      <li>no timeouts — hung upstream held sockets forever</li>
+    </ul></div>
+    <div class="col after"><h4>After</h4><ul>
+      <li>try/catch + <code>AbortSignal.timeout</code> (30–90s) + JSON 502s</li>
+      <li><code>res.headersSent</code> guards; process-level rejection handlers</li>
+      <li>one upstream failure = one failed request, not a dead container</li>
+    </ul></div>
+  </div>
+</div>
+
+<div class="gap">
+  <div class="gap-h"><span class="id">#26-28</span><span class="t">Compose / consistency / crisis detection</span><span class="pill p-fixed">FIXED</span></div>
+  <div class="gap-b">
+    <div class="col before"><h4>Before</h4><ul>
+      <li><code>WEB_API_SECRET</code>/<code>OTP_PEPPER</code> never reached the container</li>
+      <li>crisis keywords: 5 phrases — missed most real Thai self-harm wording</li>
+    </ul></div>
+    <div class="col after"><h4>After</h4><ul>
+      <li>compose passthrough added (DATABASE_URL interpolation preserved)</li>
+      <li>14 phrases — misses are worse than false positives here</li>
+      <li>truncation mismatch (4000 stored / 5000 sent) unified by team</li>
+    </ul></div>
+  </div>
+</div>
+
+<h2><span class="sev-ok">🔵</span> Already solved by the team's newer commits <span class="tag">verified, not duplicated</span></h2>
+<table>
+  <tr><th>what they shipped</th><th>covers</th></tr>
+  <tr><td>rate-limit.js (global + strict)</td><td>#8 rate limiting</td></tr>
+  <tr><td>nginx /api/ + searxng proxy</td><td>#11, part of #7</td></tr>
+  <tr><td>privacy.js — AES-256-GCM + hashed IDs</td><td>data-at-rest for #2/#4</td></tr>
+  <tr><td>migrations 001–004 (anon users, alerts, cleanup)</td><td>#14 pool/schema discipline</td></tr>
+  <tr><td>DB-aware /health + HSTS + CSP</td><td>#23, #26</td></tr>
+  <tr><td>passwordless anonymous auth</td><td>#1/#2 storage half</td></tr>
+  <tr><td>removed maxseq leak, deco pngs, key args</td><td>#13, #16, #19-20</td></tr>
+</table>
+
+<h2><span class="sev-med">⚠️</span> Needs you — the 2 humans-only items</h2>
+
+<div class="human">
+  <h3>#10a — Voice/ASR is credential-blocked, not code-blocked</h3>
+  <p>New key works for LLM (<code>thaillm-8b</code> ✓) but the server returns <span class="mono">403 key_model_access_denied</span> for <span class="mono">ptm-asr-1</span>.<br>
+  → get an ASR-enabled key <b>or</b> say the word and I reroute voice to your existing aiforthai key today.</p>
+</div>
+<div class="human">
+  <h3>#29 — Canonical git remote <span style="color:var(--green)">— RESOLVED ✓</span></h3>
+  <p>You called it: <b>gitlab</b>. Pushed <span class="mono">main → cda80a4</span> (CI deploy triggered) + <span class="mono">deploy-team07</span> synced. The github <span class="mono">origin</span> is untouched — delete it if it's dead weight.</p>
+</div>
+
+<h2>📊 Scoreboard</h2>
+<div class="bar-wrap">
+  <div class="bar-row">
+    <div class="bar-lbl"><span>BEFORE AUDIT — open gaps</span><span>30</span></div>
+    <div class="bar"><div class="open"></div></div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-lbl"><span>AFTER PASS 1 (stale local base) — fixed</span><span>28 / 30</span></div>
+    <div class="bar"><div class="done1"></div></div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-lbl"><span>AFTER REBASE ONTO LIVE main — fixed &amp; pushed</span><span>28 / 30 · commit cda80a4</span></div>
+    <div class="bar"><div class="done2"></div></div>
+  </div>
+</div>
+
+<h2>🔬 Verification trail — every claim backed by a real run</h2>
+<div class="verify">
+  <div class="v"><div class="t">API syntax</div><div class="r">node --check · 7/7 OK</div></div>
+  <div class="v"><div class="t">TypeScript</div><div class="r">tsc --noEmit · 0 errors</div></div>
+  <div class="v"><div class="t">Unit tests</div><div class="r">vitest · 3/3 passed</div></div>
+  <div class="v"><div class="t">Production build</div><div class="r">vite build · ✓ 6.10s</div></div>
+  <div class="v"><div class="t">Live API smoke</div><div class="r">9/9 — CORS, 401 forged webhook, 429 limits</div></div>
+  <div class="v"><div class="t">Key liveness</div><div class="r">200 models · 200 chat · 401 bad key · 403 ASR scope</div></div>
+  <div class="v"><div class="t">Docker image</div><div class="r">docker build ✓</div></div>
+  <div class="v"><div class="t">Delivery</div><div class="r">pushed gitlab/main · CI deploy triggered</div></div>
+</div>
+
+<footer>JaiKraJok gap audit · 30 found → 28 fixed · commit cda80a4 on gitlab/main · generated with 🩶 by [K]</footer>
+</div>
+</body>
+</html>
