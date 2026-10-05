@@ -1,8 +1,14 @@
 import pg from "pg";
-import { encryptText, decryptText, hashId } from "./privacy.js";
+import { encryptText, decryptText, hashId, idLookupCandidates } from "./privacy.js";
+import { requireAuthKey } from "./auth.js";
 
 // Shared connection pool — reused across requests
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+
+// Auth middleware — registered in index.js with requireAuthKey("optional"):
+// enforced whenever USER_DATA_PEPPER is configured, open (legacy) otherwise.
+// Chat history is personal data; the raw web/LINE user id is not a secret.
+export const historyAuth = requireAuthKey("optional");
 
 // Ensure the chat_messages table exists on first use
 let tableReady = false;
@@ -60,6 +66,8 @@ export default async function handler(req, res) {
     const stitle = safeStr(session_title, 128);
 
     try {
+      // encryptText throws without ENCRYPTION_KEY (fail-closed, review #2):
+      // the save is refused rather than storing plaintext.
       await pool.query(
         `INSERT INTO chat_messages
            (line_user_id, role, text, source, session_id, session_title)
@@ -85,16 +93,21 @@ export default async function handler(req, res) {
     if (!lineUserId || lineUserId.length > 128)
       return res.status(400).json({ error: "Missing or invalid line_user_id" });
 
+    // Header x-user-id must match the id being read (defense in depth).
+    if ((req.get("x-user-id") || lineUserId) !== lineUserId) {
+      return res.status(401).json({ error: "x-user-id does not match requested user" });
+    }
+
     try {
-      // Match the hashed id first; the raw id is a fallback for legacy rows
-      // that predate the anonymization migration (004).
+      // Match hash candidates (current + legacy unpeppered); the raw id is a
+      // fallback for legacy rows that predate anonymization migration (004).
       const { rows } = await pool.query(
         `SELECT role, text, source, created_at, session_id, session_title
            FROM chat_messages
           WHERE line_user_id = ANY($1::text[])
           ORDER BY created_at ASC
           LIMIT 200`,
-        [[hashId(lineUserId), lineUserId]]
+        [idLookupCandidates(lineUserId)]
       );
 
       for (const row of rows) row.text = decryptText(row.text); // § decrypt AES-256-GCM

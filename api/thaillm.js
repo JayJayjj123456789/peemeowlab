@@ -14,7 +14,8 @@ async function callUpstream(method, upstream, body) {
 
 export default async function handler(req, res) {
   const path = req.url.replace(/^\/thaillm/, "");
-  const upstream = `https://tokenmind.pathumma.in.th${path}`;
+  const base = (process.env.TOKENMIND_BASE_URL || "https://tokenmind.pathumma.in.th").replace(/\/$/, "");
+  const upstream = `${base}${path.startsWith("/v1") && base.endsWith("/v1") ? path.slice(3) : path}`;
   console.log(`[thaillm→tokenmind] → ${req.method} ${upstream}`);
   try {
     let response = await callUpstream(req.method, upstream, req.body);

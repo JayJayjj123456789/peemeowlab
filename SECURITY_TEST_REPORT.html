@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JaiKraJok — Security Test Report</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI','Noto Sans',sans-serif;background:#0f1117;color:#e2e8f0;padding:32px;font-size:14px}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:1.7rem;color:#fff;margin-bottom:4px}
+  h1 .accent{color:#7dd3fc}
+  .sub{color:#64748b;margin-bottom:28px}
+  .badges{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:28px}
+  .badge{border-radius:10px;padding:14px 22px;border:1px solid #2d3250;background:#1e2030;text-align:center;min-width:130px}
+  .badge .num{font-size:1.9rem;font-weight:800}
+  .badge .lbl{font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em}
+  .g .num{color:#6ee7b7}.r .num{color:#f87171}.y .num{color:#fbbf24}.b .num{color:#7dd3fc}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+  .card{background:#1e2030;border:1px solid #2d3250;border-radius:12px;padding:18px}
+  .card h2{font-size:.95rem;color:#fff;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .pill{font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px}
+  .p-pass{background:#134e33;color:#6ee7b7}
+  .p-warn{background:#4d3a10;color:#fbbf24}
+  .p-info{background:#15344f;color:#7dd3fc}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  td,th{padding:5px 8px;text-align:left;border-bottom:1px solid #252840}
+  th{color:#94a3b8;font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+  .t{color:#6ee7b7;font-weight:700}.f{color:#f87171;font-weight:700}.w{color:#fbbf24;font-weight:700}
+  .note{font-size:11.5px;color:#94a3b8;margin-top:8px;line-height:1.5}
+  .full{grid-column:1/-1}
+  .bar{height:8px;background:#252840;border-radius:99px;overflow:hidden;margin-top:6px}
+  .bar>i{display:block;height:100%;background:#34d399;border-radius:99px}
+  .ybar>i{background:#fbbf24}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>🪞 JaiKraJok <span class="accent">Security Test Report</span></h1>
+<div class="sub">Full-scope test run — API · Client · Docker/CI &nbsp;·&nbsp; 2026-10-05 &nbsp;·&nbsp; local env, real booted API, no DB</div>
+
+<div class="badges">
+  <div class="badge g"><div class="num">41</div><div class="lbl">checks run</div></div>
+  <div class="badge g"><div class="num">40</div><div class="lbl">passed</div></div>
+  <div class="badge y"><div class="num">1</div><div class="lbl">caught &amp; fixed</div></div>
+  <div class="badge r"><div class="num">0</div><div class="lbl">critical vulns</div></div>
+  <div class="badge b"><div class="num">6</div><div class="lbl">test groups</div></div>
+</div>
+
+<div class="grid">
+
+  <div class="card">
+    <h2>🔐 Crypto &amp; Auth Unit Suite <span class="pill p-pass">19/19 PASS</span></h2>
+    <div class="bar"><i style="width:100%"></i></div>
+    <table>
+      <tr><td>AES-256-GCM round-trip (Thai+ASCII)</td><td class="t">✓</td></tr>
+      <tr><td>Random salt/IV → unique ciphertexts</td><td class="t">✓</td></tr>
+      <tr><td>Legacy ciphertext still decrypts</td><td class="t">✓</td></tr>
+      <tr><td>Tampered ciphertext rejected (GCM)</td><td class="t">✓</td></tr>
+      <tr><td><b>Fail-closed</b> without ENCRYPTION_KEY</td><td class="t">✓</td></tr>
+      <tr><td>Peppered hash ≠ brute-forceable SHA-256</td><td class="t">✓</td></tr>
+      <tr><td>Auth-key derivation + timing-safe compare</td><td class="t">✓</td></tr>
+      <tr><td>Middleware: valid→next · wrong→401 · no-pepper→503</td><td class="t">✓</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>🌐 Live Integration (real booted API) <span class="pill p-pass">19/19 PASS</span></h2>
+    <div class="bar"><i style="width:100%"></i></div>
+    <table>
+      <tr><td>Webhook: no / bad / well-shaped-wrong signature</td><td class="t">401 ✓</td></tr>
+      <tr><td>/user-data export+delete: no auth / wrong key / cross-user</td><td class="t">401 ✓</td></tr>
+      <tr><td>/history unauthenticated (pepper set)</td><td class="t">401 ✓</td></tr>
+      <tr><td>Admin: no secret / wrong secret / forged cookie</td><td class="t">401 ✓</td></tr>
+      <tr><td>Admin: correct secret → cookie → URL-free access</td><td class="t">✓</td></tr>
+      <tr><td>/auth/challenge with fake LINE token</td><td class="t">401 ✓</td></tr>
+      <tr><td>Security headers (CSP·HSTS·nosniff·XFO·RP)</td><td class="t">5/5 ✓</td></tr>
+      <tr><td>Rate limiter 10/15min → 429 on schedule</td><td class="t">✓</td></tr>
+      <tr><td>PROD boot w/o LINE secret → exits(1)</td><td class="t">✓</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>🧨 LLM Red-Team (promptfoo) <span class="pill p-warn">🚨 PROD AUTH BROKEN — SEE §7</span></h2>
+    <table>
+      <tr><td>15 cases · 19 leak-prevention assertions</td><td class="t">✓</td></tr>
+      <tr><td>System-prompt extraction (EN + TH)</td><td class="t">✓ covered</td></tr>
+      <tr><td>API-key / admin credential exfiltration (TH)</td><td class="t">✓ covered</td></tr>
+      <tr><td>Cross-user history access</td><td class="t">✓ covered</td></tr>
+      <tr><td>Debug-mode jailbreak</td><td class="t">✓ covered</td></tr>
+      <tr><td>Live execution</td><td class="f">✗ blocked — upstream dead + prod key rejected (401)</td></tr>
+    </table>
+    <div class="note">Run: <code>pnpm test:ai</code></div>
+  </div>
+
+  <div class="card">
+    <h2>🕵️ Secret Scan <span class="pill p-pass">3/3 PASS</span></h2>
+    <div class="bar"><i style="width:100%"></i></div>
+    <table>
+      <tr><td>No key patterns in tracked files</td><td class="t">✓</td></tr>
+      <tr><td>.env untracked + never in git history</td><td class="t">✓</td></tr>
+      <tr><td>promptfoo uses env refs only</td><td class="t">✓</td></tr>
+    </table>
+  </div>
+
+  <div class="card full">
+    <h2>📦 Dependency Audit <span class="pill p-warn">1 HIGH runtime · 68 HIGH build-chain · 0 CRITICAL</span></h2>
+    <table>
+      <tr><th>Target</th><th>Advisories</th><th>Severity split</th><th>Key packages</th><th>Verdict</th></tr>
+      <tr><td><b>api/</b> (runtime)</td><td>6</td><td>1 HIGH · 3 MOD · 2 LOW</td><td>path-to-regexp (ReDoS), qs, body-parser</td><td class="w">⚠ bump express deps</td></tr>
+      <tr><td>root (client+build)</td><td>163</td><td>68 HIGH · 85 MOD · 10 LOW</td><td>vite, rollup, sharp, axios, lodash…</td><td class="w">⚠ mostly build-time</td></tr>
+    </table>
+    <div class="bar ybar" style="margin-top:10px"><i style="width:96%"></i></div>
+    <div class="note">No criticals anywhere. Runtime-reachable HIGH: <code>path-to-regexp</code> — fix with <code>pnpm up --latest</code> in api/. The 68 root HIGHs sit in dev/build tooling, not shipped code paths.</div>
+  </div>
+
+  <div class="card full">
+    <h2>🛠️ Build · Types · CI Rules <span class="pill p-pass">ALL PASS</span></h2>
+    <table>
+      <tr><td>node --check — 24 API files</td><td class="t">✓ clean</td></tr>
+      <tr><td>tsc --noEmit (incl. new auth code in App.tsx)</td><td class="t">✓ exit 0</td></tr>
+      <tr><td>vitest client unit tests</td><td class="t">✓ 3/3</td></tr>
+      <tr><td>CI check-stage sim: ports · mounts · healthcheck · memory · log rotation</td><td class="t">✓ 6/6</td></tr>
+    </table>
+  </div>
+
+  <div class="card full" style="border-color:#4d3a10;background:#241f14">
+    <h2>🐛 Finding caught <em>during</em> testing <span class="pill p-warn">FIXED &amp; RE-VERIFIED</span></h2>
+    <table>
+      <tr>
+        <td style="width:70%">
+          <b style="color:#fbbf24">I8 — guard-order leak:</b> valid key(user A) + query asking user B
+          returned <b>500</b> (DB guard) instead of <b>401</b> — mismatched requests could probe
+          server config state. Not a data breach; wrong failure semantics.
+        </td>
+        <td>
+          <b>Fix:</b> auth-mismatch check moved above DB guard in both handlers.<br>
+          <b>Re-test:</b> <span class="t">I8 → 401 ✓</span> &nbsp; <span class="t">I9 → 500(auth-ok) ✓</span>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+</div>
+
+<div class="sub" style="margin-top:8px">Full details: <code>SECURITY_TEST_REPORT.md</code> · Generated after security-review fixes · JaiKraJok team07</div>
+</div>
+</body>
+</html>

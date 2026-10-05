@@ -6,7 +6,7 @@
     "dotenv": "^16.4.5",
     "express": "4.21.2",
     "express-rate-limit": "^7.5.0",
-    "nodemailer": "9.0.4",
+    "nodemailer": "10.0.14",
     "pg": "8.13.3"
   }
 }

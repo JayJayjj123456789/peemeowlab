@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import webhookHandler from "./webhook.js";
-import historyHandler from "./history.js";
+import historyHandler, { historyAuth } from "./history.js";
 import ssenseHandler from "./ssense.js";
 import vajaHandler from "./vaja.js";
 import tavilyHandler from "./tavily.js";
@@ -14,7 +14,9 @@ import lineTokenHandler from "./line-token.js";
 import sendOtpHandler, { verifyOtp } from "./send-otp.js";
 import guardianEmailHandler from "./guardian-email.js";
 import adminDbHandler from "./admin-db.js";
+import authChallengeHandler from "./auth-challenge.js";
 import { exportUserData, deleteUserData } from "./user-data.js";
+import { requireAuthKey } from "./auth.js";
 import { globalLimiter, strictLimiter } from "./rate-limit.js";
 import { runMigrations } from "./migrate.js";
 import pg from "pg";
@@ -81,8 +83,11 @@ app.get("/db-health", async (_req, res) => {
 app.post("/webhook", webhookHandler);
 app.post("/webhooks/line", webhookHandler);  // canonical URL: /api/webhooks/line
 
-// line-token reads raw body manually via req.on("data")
-app.post("/line-token", lineTokenHandler);
+// line-token reads raw body manually via req.on("data").
+// strictLimiter is attached inline: the global strictLimiter app.use() below
+// (line ~108) never fires for this route because Express matches this
+// handler first — verified live (12 rapid POSTs, no 429 before this fix).
+app.post("/line-token", strictLimiter, lineTokenHandler);
 
 // ── Streaming proxy handlers — pipe req body directly, BEFORE json parser ────
 app.all(["/pathumma", "/pathumma/*"], (req, res) => {
@@ -108,13 +113,14 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(["/send-otp", "/guardian-email", "/line-token"], strictLimiter);
 
 // ── JSON-body handlers ────────────────────────────────────────────────────────
-app.all("/history", historyHandler);
+// /history carries per-user auth headers when USER_DATA_PEPPER is configured
+// (optional mode so existing web deploys keep working until the pepper is set).
+app.all("/history", historyAuth, historyHandler);
 app.post("/ssense", ssenseHandler);
 app.post("/vaja", vajaHandler);
 app.post("/tavily", tavilyHandler);       // kept for backward compat
 app.post("/search", searchHandler);       // SearXNG primary + Tavily fallback
 app.all(["/thaillm", "/thaillm/*"], thaillmHandler);
-
 app.post("/send-otp", sendOtpHandler);
 
 // POST /verify-otp — server-side OTP verification (single-use, 10-min TTL,
@@ -131,15 +137,28 @@ app.post("/verify-otp", (req, res) => {
 
 app.post("/guardian-email", guardianEmailHandler);
 
+// ── Auth challenge — mints per-user auth keys after LINE token verification ──
+app.post("/auth/challenge", strictLimiter, authChallengeHandler);
+
 // ── Admin DB inspection (read-only, secret-protected) ────────────────────────
 app.get("/admin-db", adminDbHandler);
 
 // ── PDPA data rights: export / erasure ───────────────────────────────────────
+// Auth: x-user-id + x-auth-key headers (minted by POST /auth/challenge).
+// The raw LINE id is not a secret — these endpoints must never be open.
+app.use(["/user-data", "/user-data/*"], requireAuthKey("require"));
 app.get("/user-data/export", exportUserData);
 app.delete("/user-data", deleteUserData);
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 8000;
+
+// Fail closed in production: an unsigned webhook is a forged webhook. Missing
+// LINE_CHANNEL_SECRET would silently accept fake messages (review finding #3).
+if (process.env.NODE_ENV === "production" && !process.env.LINE_CHANNEL_SECRET) {
+  console.error("FATAL: LINE_CHANNEL_SECRET is not set — refusing to start in production (webhooks would be unauthenticated).");
+  process.exit(1);
+}
 
 runMigrations()
   .then(() => {

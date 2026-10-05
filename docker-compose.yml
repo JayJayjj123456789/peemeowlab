@@ -68,7 +68,7 @@ services:
     environment:
       ROOT_PATH: /api
       NODE_ENV: production
-      DATABASE_URL: postgresql://app:${TEAM:-team07}pass@db:5432/app
+      DATABASE_URL: postgresql://app:${APP_DB_PASSWORD:?APP_DB_PASSWORD must be set}@db:5432/app
       SEARXNG_URL: "http://searxng:8080"
       WEB_API_SECRET:              "${APP_WEB_API_SECRET:-}"
       OTP_PEPPER:                  "${APP_OTP_PEPPER:-jkj}"
@@ -82,6 +82,7 @@ services:
       TAVILY_API_KEY:              "${APP_TAVILY_API_KEY}"
       GEMINI_API_KEY:              "${APP_GEMINI_API_KEY}"
       ENCRYPTION_KEY:              "${APP_ENCRYPTION_KEY:-}"
+      USER_DATA_PEPPER:            "${APP_USER_DATA_PEPPER:-}"
       ADMIN_EMAIL:                 "${APP_ADMIN_EMAIL:-}"
       SMTP_USER:                   "${APP_SMTP_USER:-}"
       SMTP_PASS:                   "${APP_SMTP_PASS:-}"
@@ -107,7 +108,9 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: app
-      POSTGRES_PASSWORD: ${TEAM:-team07}pass
+      # Required — no default password ships with the stack. Set APP_DB_PASSWORD
+      # in GitLab CI/CD variables (or .env). Compose fails fast if missing.
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD must be set}
       POSTGRES_DB: app
     volumes:
       - /data/hack/${TEAM:-team07}/pgdata:/var/lib/postgresql/data

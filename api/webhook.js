@@ -6,7 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import pg from "pg";
-import { encryptText, decryptText, hashId } from "./privacy.js";
+import { encryptText, decryptText, hashId, idLookupCandidates } from "./privacy.js";
 import { recordAlert } from "./notify.js";
 
 export const config = { api: { bodyParser: false } };
@@ -114,11 +114,11 @@ async function ensureDB() {
 /** Get or create a user-state row, return it. */
 async function getUserState(userId) {
   await ensureDB();
-  const key = hashId(userId);
+  const keys = idLookupCandidates(userId);
   // Match the hashed id first; raw id is a legacy fallback (pre-004 rows)
   const found = await pool.query(
     `SELECT * FROM line_user_state WHERE line_user_id = ANY($1::text[])`,
-    [[key, userId]]
+    [keys]
   );
   if (found.rows.length > 0) return found.rows[0];
   // INSERT … ON CONFLICT DO NOTHING ensures idempotency
@@ -126,11 +126,11 @@ async function getUserState(userId) {
     `INSERT INTO line_user_state (line_user_id, session_id)
      VALUES ($1, $2)
      ON CONFLICT (line_user_id) DO NOTHING`,
-    [key, randomUUID()]
+    [hashId(userId), randomUUID()]
   );
   const { rows } = await pool.query(
     `SELECT * FROM line_user_state WHERE line_user_id = ANY($1::text[])`,
-    [[key, userId]]
+    [keys]
   );
   return rows[0];
 }
@@ -153,7 +153,7 @@ async function updateUserState(userId, updates) {
   }
   if (fields.length === 0) return;
   fields.push(`updated_at = NOW()`);
-  vals.push([key, userId]);
+  vals.push(idLookupCandidates(userId));
   await pool.query(
     `UPDATE line_user_state SET ${fields.join(", ")} WHERE line_user_id = ANY($${idx}::text[])`,
     vals
@@ -167,7 +167,7 @@ async function getRecentMessages(userId, limit = 10) {
       `SELECT role, text FROM chat_messages
        WHERE line_user_id = ANY($1::text[]) AND source = 'line'
        ORDER BY created_at DESC LIMIT $2`,
-      [[hashId(userId), userId], limit]
+      [idLookupCandidates(userId), limit]
     );
     return rows.reverse().map((r) => ({ ...r, text: decryptText(r.text) }));
   } catch (err) {
@@ -179,12 +179,15 @@ async function getRecentMessages(userId, limit = 10) {
 async function saveToDB(userId, role, text, sessionId, sessionTitle, responseTimeMs = null) {
   if (!process.env.DATABASE_URL) return null;
   try {
+    // encryptText now THROWS when the key is missing (fail-closed, review #2):
+    // the message is dropped from storage but the chat flow continues.
+    const cipher = encryptText(String(text).slice(0, 8000));
     const { rows } = await pool.query(
       `INSERT INTO chat_messages
          (line_user_id, role, text, source, session_id, session_title, response_time_ms)
          VALUES ($1, $2, $3, 'line', $4, $5, $6)
          RETURNING id`,
-      [hashId(userId), role, encryptText(String(text).slice(0, 8000)), sessionId, sessionTitle, responseTimeMs]
+      [hashId(userId), role, cipher, sessionId, sessionTitle, responseTimeMs]
     );
     return rows[0]?.id || null;
   } catch (err) {
@@ -211,11 +214,12 @@ async function updateMessageMetrics(messageId, responseTimeMs, tokensUsed = null
 async function saveToDBOld(userId, role, text, sessionId, sessionTitle) {
   if (!process.env.DATABASE_URL) return;
   try {
+    const cipher = encryptText(String(text).slice(0, 8000));
     await pool.query(
       `INSERT INTO chat_messages
          (line_user_id, role, text, source, session_id, session_title)
        VALUES ($1, $2, $3, 'line', $4, $5)`,
-      [hashId(userId), role, encryptText(String(text).slice(0, 8000)), sessionId || null, sessionTitle || null]
+      [hashId(userId), role, cipher, sessionId || null, sessionTitle || null]
     );
   } catch (err) {
     console.error("DB save error:", err?.message);
@@ -234,11 +238,14 @@ function getRawBody(req) {
 }
 
 function verifySignature(rawBody, sig, secret) {
-  // LINE sends x-line-signature as base64(HMAC-SHA256(body, channel_secret))
-  if (!sig || typeof sig !== "string") return false;
+  // LINE sends x-line-signature as base64(HMAC-SHA256(body, channel_secret)).
+  // Constant-time compare — timing attacks on `===` are theoretical but free
+  // to prevent (review finding: signature check also used to fail open when
+  // LINE_CHANNEL_SECRET was unset; index.js now refuses to boot without it).
+  if (!sig || !secret) return false;
   const expected = createHmac("sha256", secret).update(rawBody).digest("base64");
-  const a = Buffer.from(sig, "utf8");
-  const b = Buffer.from(expected, "utf8");
+  const a = Buffer.from(String(sig));
+  const b = Buffer.from(expected);
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
 }
@@ -365,7 +372,9 @@ async function llmReply(text, history = []) {
       ...trimmed.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text })),
       { role: "user", content: text },
     ];
-    const res = await fetch("https://tokenmind.pathumma.in.th/v1/chat/completions", {
+    const _tmBase = (process.env.TOKENMIND_BASE_URL || "https://tokenmind.pathumma.in.th").replace(/\/$/, "");
+    const _tmUrl = _tmBase.endsWith("/v1") ? `${_tmBase}/chat/completions` : `${_tmBase}/v1/chat/completions`;
+    const res = await fetch(_tmUrl, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model: "thaillm-8b", messages, max_tokens: MAX_OUTPUT_TOKENS, temperature: 0.4 }),
@@ -1355,12 +1364,13 @@ export default async function handler(req, res) {
 
   const rawBody = await getRawBody(req);
 
-  // Signature verification — fail-closed: no secret configured = reject,
-  // otherwise an unset env var silently disables forgery protection
+  // Signature verification — fail CLOSED: without a configured secret no
+  // request can verify, so nothing is accepted (index.js also refuses to
+  // boot in production without LINE_CHANNEL_SECRET).
   const secret    = process.env.LINE_CHANNEL_SECRET;
   const signature = req.headers["x-line-signature"] || "";
-  if (!secret || !verifySignature(rawBody, signature, secret)) {
-    console.warn("LINE signature mismatch or secret missing — rejecting");
+  if (!verifySignature(rawBody, signature, secret)) {
+    console.warn("LINE signature mismatch — rejecting");
     return res.status(401).json({ error: "Invalid signature" });
   }
 

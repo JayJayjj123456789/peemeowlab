@@ -2,23 +2,72 @@
  * admin-db.js — read-only DB inspection endpoint (HTML dashboard)
  *
  * GET /admin-db?secret=<ADMIN_SECRET>&tab=messages&page=2
+ *     (first visit authenticates + issues an admin_sess cookie; afterwards
+ *      plain /admin-db?tab=… works without the secret in the URL)
  *
  * tabs: messages | emotions | homework | alerts
  * page: 1-based, 20 rows per page
  */
 
 import pg from "pg";
+import { createHash, timingSafeEqual } from "crypto";
 import { decryptText } from "./privacy.js";
 
 const PAGE_SIZE = 20;
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
+/**
+ * Constant-time secret comparison (review finding #4 — the old `!==`
+ * comparison leaked the secret byte-by-byte through timing).
+ */
+function secretMatches(provided) {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret || !provided) return false;
+  const a = createHash("sha256").update(String(provided)).digest();
+  const b = createHash("sha256").update(secret).digest();
+  return timingSafeEqual(a, b);
+}
+
+/**
+ * Issue a short-lived session cookie so the secret stops appearing in every
+ * URL (nginx logs, browser history, Referer). First visit authenticates with
+ * ?secret=…; subsequent navigation uses the cookie alone.
+ */
+function issueSession(res) {
+  const token = createHash("sha256")
+    .update(`${process.env.ADMIN_SECRET}:${Date.now()}:${Math.random()}`)
+    .digest("hex");
+  sessions.set(token, Date.now() + 4 * 60 * 60 * 1000); // 4h
+  res.setHeader("Set-Cookie", `admin_sess=${token}; HttpOnly; SameSite=Strict; Path=/api/admin-db; Max-Age=14400`);
+}
+
+const sessions = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [t, exp] of sessions) if (exp < now) sessions.delete(t);
+}, 10 * 60 * 1000).unref();
+
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).send("GET only");
 
-  const secret = process.env.ADMIN_SECRET;
-  if (!secret || req.query.secret !== secret)
+  const url = new URL(req.url, "http://x");
+  const providedSecret = url.searchParams.get("secret");
+  const cookie = req.headers.cookie || "";
+  const sessToken = /(?:^|;\s*)admin_sess=([a-f0-9]{64})/.exec(cookie)?.[1];
+
+  const authenticated =
+    secretMatches(providedSecret) ||
+    (sessToken && sessions.has(sessToken) && sessions.get(sessToken) > Date.now());
+
+  if (!authenticated) {
     return res.status(401).send("<h2>401 Unauthorized</h2>");
+  }
+  // Fresh secret visit: upgrade to a session cookie so later links/refreshes
+  // don't carry the secret in the URL.
+  if (secretMatches(providedSecret) && !sessToken) {
+    issueSession(res);
+  }
+
   if (!process.env.DATABASE_URL)
     return res.status(500).send("<h2>DATABASE_URL not configured</h2>");
 
@@ -66,7 +115,6 @@ export default async function handler(req, res) {
   res.setHeader("Content-Security-Policy",
     "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'");
 
-  const s   = req.query.secret;
   const tab  = ["messages","emotions","homework","alerts"].includes(req.query.tab)
                ? req.query.tab : "messages";
   const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -136,8 +184,9 @@ export default async function handler(req, res) {
     const safePage   = Math.min(page, totalPages);
 
     // ── helpers ────────────────────────────────────────────────────────────
+    // Links rely on the admin_sess cookie — no secret in URLs (review #4).
     const link = (t, p) =>
-      `?secret=${s}&tab=${t}&page=${p}`;
+      `?tab=${t}&page=${p}`;
 
     const tabBtn = (id, label) =>
       `<a href="${link(id,1)}" class="tab${tab===id?" active":""}">${label}</a>`;
@@ -352,7 +401,7 @@ export default async function handler(req, res) {
 <script>
 (function() {
   const liveMessagesEl = document.getElementById('liveMessages');
-  const eventSource = new EventSource('?secret=${s}&stream=true');
+  const eventSource = new EventSource('?stream=true');
 
   eventSource.onmessage = function(e) {
     try {

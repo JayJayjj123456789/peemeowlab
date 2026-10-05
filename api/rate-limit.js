@@ -11,7 +11,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import rateLimit from "express-rate-limit";
 
-const EXEMPT_PREFIXES = ["/health", "/webhook", "/webhooks/line", "/admin-db"];
+// /admin-db removed from exemptions — it is secret/cookie-authenticated now,
+// and its 2s SSE polling is exactly what a rate limiter exists to bound.
+const EXEMPT_PREFIXES = ["/health", "/webhook", "/webhooks/line"];
 
 function isExempt(req) {
   return EXEMPT_PREFIXES.some((p) => req.path === p || req.path.startsWith(p + "/"));

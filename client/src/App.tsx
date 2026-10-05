@@ -1362,10 +1362,17 @@ function AppShell({ currentUser, onLogout, age, guardianConsent }: { currentUser
   const deleteRemoteUserData = async () => {
     const uid = lineUserIdRef.current;
     if (!uid) return;
+    const rawUid = uid.startsWith("usr_line_") ? uid.replace("usr_line_", "") : uid;
+    const authKey = sessionStorage.getItem(`jkj_auth_key:${rawUid}`);
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (authKey) {
+      headers["x-user-id"] = rawUid;
+      headers["x-auth-key"] = authKey;
+    }
     try {
       await fetch("/api/user-data", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ line_user_id: uid }),
       });
     } catch (e) {
@@ -1377,8 +1384,15 @@ function AppShell({ currentUser, onLogout, age, guardianConsent }: { currentUser
   const fetchRemoteUserData = async (): Promise<Record<string, unknown> | null> => {
     const uid = lineUserIdRef.current;
     if (!uid) return null;
+    const rawUid = uid.startsWith("usr_line_") ? uid.replace("usr_line_", "") : uid;
+    const authKey = sessionStorage.getItem(`jkj_auth_key:${rawUid}`);
+    const headers: Record<string, string> = {};
+    if (authKey) {
+      headers["x-user-id"] = rawUid;
+      headers["x-auth-key"] = authKey;
+    }
     try {
-      const res = await fetch(`/api/user-data/export?line_user_id=${encodeURIComponent(uid)}`);
+      const res = await fetch(`/api/user-data/export?line_user_id=${encodeURIComponent(uid)}`, { headers });
       if (!res.ok) return null;
       return await res.json();
     } catch (e) {
@@ -1394,7 +1408,13 @@ function AppShell({ currentUser, onLogout, age, guardianConsent }: { currentUser
     const sess = sessionsRef2.current.find(s => s.id === sid);
     fetch("/api/history", {
       method: "POST",
-      headers: getApiHeaders(),
+      headers: (() => {
+        const rawUid = uid.startsWith("usr_line_") ? uid.replace("usr_line_", "") : uid;
+        const authKey = sessionStorage.getItem(`jkj_auth_key:${rawUid}`);
+        const h: Record<string, string> = { "Content-Type": "application/json" };
+        if (authKey) { h["x-user-id"] = rawUid; h["x-auth-key"] = authKey; }
+        return h;
+      })(),
       body: JSON.stringify({
         line_user_id: uid,
         role,
@@ -3636,11 +3656,33 @@ export default function App() {
               avatarUrl: profile.pictureUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${profile.userId}`,
             };
 
+            // Mint the per-user auth key used by /history, /user-data export
+            // and delete. The server verifies our LINE token, then returns a
+            // key derived from its secret pepper — the pepper never leaves it.
+            try {
+              const authRes = await fetch("/api/auth/challenge", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ access_token: data.access_token }),
+              });
+              if (authRes.ok) {
+                const { auth_key } = await authRes.json();
+                if (auth_key) sessionStorage.setItem(`jkj_auth_key:${profile.userId}`, auth_key);
+              }
+            } catch {
+              // Auth-key minting is best-effort; requests will surface 401s
+              // only when the server actually enforces the pepper.
+            }
+
+            /** Auth headers for personal-data endpoints (may be empty pre-mint). */
+            const authHeaders = (): Record<string, string> => {
+              const key = sessionStorage.getItem(`jkj_auth_key:${profile.userId}`);
+              return key ? { "x-user-id": profile.userId, "x-auth-key": key } : {};
+            };
+
             // Fetch shared LINE+Web history via Vercel serverless function (uses service key server-side)
             try {
-              const histRes = await fetch(`/api/history?line_user_id=${encodeURIComponent(profile.userId)}`, {
-                headers: getApiHeaders(),
-              });
+              const histRes = await fetch(`/api/history?line_user_id=${encodeURIComponent(profile.userId)}`, { headers: authHeaders() });
               if (histRes.ok) {
                 const { sessions: dbSessions } = await histRes.json() as {
                   sessions: { session_id: string; session_title: string; messages: { role: string; text: string; source: string; created_at: string }[] }[]
