@@ -3,6 +3,7 @@ import express from "express";
 import webhookHandler from "./webhook.js";
 import historyHandler, { historyAuth } from "./history.js";
 import ssenseHandler from "./ssense.js";
+import emotionHandler from "./emotion.js";
 import vajaHandler from "./vaja.js";
 import tavilyHandler from "./tavily.js";
 import searchHandler from "./search.js";
@@ -118,6 +119,7 @@ app.use(["/send-otp", "/guardian-email", "/line-token"], strictLimiter);
 // (optional mode so existing web deploys keep working until the pepper is set).
 app.all("/history", historyAuth, historyHandler);
 app.post("/ssense", ssenseHandler);
+app.post("/emotion", emotionHandler);   // own emotion API (keyword+negation, SSense tiebreaker)
 app.post("/vaja", vajaHandler);
 app.post("/tavily", tavilyHandler);       // kept for backward compat
 app.post("/search", searchHandler);       // SearXNG primary + Tavily fallback
