@@ -31,6 +31,7 @@ check:
       LO=$BASE; HI=$((BASE+9)); FAIL=0
 
       echo "== port binding =="
+      grep -E '^\s*-\s*"?[0-9.$][^:]*:[0-9$]' docker-compose.yml > /tmp/ports.txt 2>/dev/null || true
       while read -r line; do
         case "$line" in
           *'${BASE'*|*'$BASE'*) echo "  ok (var) $line" ;;
@@ -41,7 +42,7 @@ check:
             else echo "  ok $line"; fi ;;
           *) echo "  ❌ not bound to 127.0.0.1 -> $line"; FAIL=1 ;;
         esac
-      done < <(grep -E '^\s*-\s*"?[0-9.$][^:]*:[0-9$]' docker-compose.yml || true)
+      done < /tmp/ports.txt
 
       echo "== bind mounts =="
       for m in $(grep -oE '^\s*-\s*[./][^:]*:' docker-compose.yml | sed 's/^\s*-\s*//; s/:$//' || true); do
@@ -71,7 +72,6 @@ deploy:
     name: $TEAM
     url: https://$TEAM.aiforthai.in.th
   script:
-    - export DOCKER_HOST=unix:///var/run/docker.sock
     - printenv | grep '^APP_' > .env || true
     - docker compose -p "$TEAM" up -d --build --remove-orphans
     - |
@@ -82,7 +82,7 @@ deploy:
         sleep 5
       done
       docker compose -p "$TEAM" ps
-    - docker compose -p "$TEAM" exec -T api curl -fsS http://localhost:8000/health && echo " <- /health OK"
+    - curl -fsS "http://127.0.0.1:${BASE_1}/health" && echo " <- /health OK"
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
 
