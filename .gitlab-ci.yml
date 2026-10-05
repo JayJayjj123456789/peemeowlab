@@ -67,13 +67,39 @@ check:
 deploy:
   stage: deploy
   timeout: 20m
-  interruptible: true
+  interruptible: false
+  resource_group: $TEAM
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+      - api_failure
   environment:
     name: $TEAM
     url: https://$TEAM.aiforthai.in.th
   script:
     - printenv | grep '^APP_' > .env || true
-    - docker compose -p "$TEAM" up -d --build --remove-orphans
+    - |
+        echo "Waiting for docker daemon (flapping workaround)..."
+        for i in $(seq 1 18); do
+          docker info >/dev/null 2>&1 && { echo "daemon up ✓"; break; }
+          echo "  daemon not ready ($i/18), sleeping 10s..."
+          sleep 10
+          if [ "$i" = "18" ]; then
+            echo "❌ docker daemon never became ready";
+            docker info || true;
+            exit 1;
+          fi
+        done
+    - |
+        for attempt in 1 2 3; do
+          docker compose -p "$TEAM" up -d --build --remove-orphans && break
+          echo "⚠️ compose up failed (attempt $attempt/3)"
+          docker info || true
+          if [ "$attempt" = "3" ]; then exit 1; fi
+          sleep 15
+        done
     - |
       echo "Waiting for healthcheck..."
       for i in $(seq 1 40); do
