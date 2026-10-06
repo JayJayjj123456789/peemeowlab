@@ -18,8 +18,8 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, get_linear_schedule_with_warmup
 
 BASE = "airesearch/wangchanberta-base-att-spm-uncased"
-DATA = "/Users/thxdadloveyoumost/jaikrajok]/ml/data_v2"
-OUT = "/Users/thxdadloveyoumost/jaikrajok]/ml/model_v2"
+DATA = "/Users/thxdadloveyoumost/jaikrajok]/ml/data_v4"
+OUT = "/Users/thxdadloveyoumost/jaikrajok]/ml/model_v4"
 LABELS = ["positive", "neutral", "negative"]
 L2I = {l: i for i, l in enumerate(LABELS)}
 
@@ -72,7 +72,7 @@ print(f"class weights (pos/neu/neg): {[round(w,2) for w in weights.tolist()]}", 
 # weight tensor must live on the SAME device as logits — create on CPU, move in train loop
 lossf = torch.nn.CrossEntropyLoss()
 
-BATCH, EPOCHS, LR = 32, 2, 3e-5
+BATCH, EPOCHS, LR = 32, 3, 3e-5
 loader = DataLoader(train_ds, batch_size=BATCH, shuffle=True, num_workers=0)
 steps = math.ceil(len(train_ds) / BATCH) * EPOCHS
 opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=LR)
