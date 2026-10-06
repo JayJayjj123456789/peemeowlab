@@ -62,6 +62,13 @@ const CRISIS_WORDS = ["อยากตาย", "ฆ่าตัวตาย", "�
 
 const TAG_RE = /\[อารมณ์[:\s]+([^\]]+)\]/i;
 
+// Negated positive/neutral FEELING words are negative signals —
+// "ไม่โอเค", "ไม่สบายใจ", "ไม่ภูมิใจ" describe a bad state, not absence of one.
+// (v1.1 fix: negation stripping used to make these silently disappear → neutral)
+const NEGATED_FEELING_RES = POSITIVE_WORDS.concat(
+  ["โอเค", "สบาย", "สงบ", "ภูมิใจ", "มีความสุข", "รู้สึกดี"]
+).map((w) => new RegExp(`(${NEGATION_RE.source})\\s*${escapeRe(w)}`, "u"));
+
 // Context guards: happy words INSIDE sad frames must lose.
 // e.g. "ต้องฝืนยิ้ม" (forced smile), "ไม่มีใครถามว่าเราโอเคไหม" (nobody asks if I'm ok)
 const NEGATIVE_OVERRIDE_RES = [
@@ -199,7 +206,10 @@ export async function classify(text, { source = "unknown", ssense = true } = {})
 
   // 2b-pre. context overrides — sad frames ("ไม่มีใครเข้าใจ", "ฝืนยิ้ม") force negative
   // even without a list keyword: the frame itself is the signal (data-driven, eval pass 1-3)
-  const negCtx = NEGATIVE_OVERRIDE_RES.some((re) => re.test(cleaned) || re.test(lower));
+  // v1.1: negated feeling words ("ไม่โอเค", "ไม่สบายใจ") also count as negative —
+  // they describe a bad state, not the absence of a good one
+  const negCtx = NEGATIVE_OVERRIDE_RES.some((re) => re.test(cleaned) || re.test(lower))
+    || NEGATED_FEELING_RES.some((re) => re.test(lower));
 
   // 2b. positive-priority: recovery wins ties — UNLESS a sad frame guards the sentence
   if (posHits.length && !negCtx) {
@@ -306,7 +316,7 @@ function respond(emotion, { engine, keywords_matched, negation_stripped, crisis_
   };
 }
 
-export const ENGINE_VERSION = "1.0.0";
+export const ENGINE_VERSION = "1.1.0";
 
 // ── HTTP surface ───────────────────────────────────────────────────────────────
 

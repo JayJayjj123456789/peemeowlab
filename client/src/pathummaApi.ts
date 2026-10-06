@@ -548,23 +548,21 @@ export async function analyzeSentiment(text: string): Promise<string> {
       tag.includes("ร่าเริง") || tag.includes("เบิกบาน") || tag.includes("มีความสุข")) return "positive";
   }
 
-  // 2. SSense API (primary)
+  // 2. Our own /api/emotion — server-side engine (regex+negation+model ensemble).
+  //    Replaces direct SSense calls: same-origin, faster, transparent, no quota.
   try {
-    const res = await fetch("/api/ssense", {
+    const res = await fetch("/api/emotion", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text.slice(0, 500) }),
+      body: JSON.stringify({ text: text.slice(0, 4000), source: "web" }),
     });
     if (res.ok) {
-      const raw = await res.json() as Record<string, unknown>[];
-      const polarity = (raw?.[0] as { sentiment?: { polarity?: string } })?.sentiment?.polarity ?? "";
-      if (polarity === "positive") return "positive";
-      if (polarity === "negative") return "negative";
-      // SSense said neutral — still run keyword fallback before accepting neutral
-      return classifyMoodFromText(text);
+      const data = await res.json();
+      if (data?.emotion && ["positive", "neutral", "negative"].includes(data.emotion))
+        return data.emotion;
     }
   } catch {
-    // fall through to keyword fallback
+    // fall through to local keyword fallback
   }
 
   // 3. Local keyword fallback

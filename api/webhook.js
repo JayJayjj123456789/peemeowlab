@@ -888,10 +888,31 @@ function buildHistoryFlex(messages) {
 
 // ── Mood / trend helpers ──────────────────────────────────────────────────────
 
-function detectMood(text) {
+function detectMoodFallback(text) {
   if (CONCERN_RE.test(text))  return "negative";
   if (POSITIVE_RE.test(text)) return "positive";
   return "neutral";
+}
+
+// detectMood — v1.1: prefer the shared /api/emotion engine (same lists+negation
+// logic as the web client), fall back to the legacy regex if the call fails.
+// Fire-and-forget safety: any error → fallback, webhook never breaks.
+async function detectMood(text) {
+  try {
+    const base = process.env.EMOTION_API_URL || `http://127.0.0.1:${process.env.PORT || 3000}`;
+    const res = await fetch(`${base}/api/emotion`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: String(text).slice(0, 4000), source: "line" }),
+      signal: AbortSignal.timeout(6_000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.emotion && ["positive", "neutral", "negative"].includes(data.emotion))
+        return data.emotion;
+    }
+  } catch { /* fall through */ }
+  return detectMoodFallback(text);
 }
 
 /** Append mood point to trend array (cap at 20). */
@@ -1035,7 +1056,7 @@ async function handleTextMessage(event) {
   }
 
   // Mood tracking
-  const mood      = detectMood(text + " " + reply);
+  const mood      = await detectMood(text + " " + reply);
   const newTrend  = pushTrend(state.trend_json, mood);
   const newStreak = isCrisis
     ? 99
@@ -1325,7 +1346,7 @@ async function handleAudioMessage(event) {
   const responseTime = Date.now() - startTime;
 
   // Mood tracking
-  const mood      = detectMood(transcription + " " + llmResponse);
+  const mood      = await detectMood(transcription + " " + llmResponse);
   const newTrend  = pushTrend(state?.trend_json, mood);
   const newStreak = mood === "negative"
     ? (state?.concern_streak || 0) + 1
