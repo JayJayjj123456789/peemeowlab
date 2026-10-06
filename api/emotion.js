@@ -137,7 +137,7 @@ async function ssensePolarity(text) {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    const p = data?.[0]?.sentiment?.polarity ?? "";
+    const p = (Array.isArray(data) ? data[0] : data)?.sentiment?.polarity ?? "";
     if (p === "positive" || p === "negative") return p;
     return null; // neutral is not decisive
   } catch {
