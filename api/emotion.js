@@ -1,22 +1,21 @@
 /**
- * emotion.js — JaiKraJok's own emotion-detection API (Phase 1 hybrid engine).
+ * emotion.js — JaiKraJok's own emotion-detection API (Phase 1 hybrid + Phase 3 ensemble).
  *
- * POST /api/emotion   { text, source? }        → classify one text
- * POST /api/emotion/batch  { texts: [...], source? } → classify many (trend backfill)
+ * POST /api/emotion       { text, source? }          → classify one text
+ * POST /api/emotion/batch { texts: [...], source? }  → classify many (trend backfill)
  *
- * Engine cascade (first decisive signal wins):
+ * Ensemble cascade (first decisive signal wins):
  *   1. [อารมณ์: ...] tag (LLM-authored, from selfie/vision flows)
- *   2. Local keyword engine — negation-aware, positive-priority (see lists below)
- *   3. SSense (aiforthai) — only consulted when keywords find nothing; neutral is
- *      not decisive, its negative/positive verdicts upgrade the result
- *   4. Neutral default
+ *   2. Local keyword engine — negation-aware, positive-priority
+ *   3. Fine-tuned WangchanBERTa (localhost microservice, EMOTION_MODEL_URL) —
+ *      consulted when keywords find nothing; used only if confidence ≥ 0.70
+ *   4. SSense (aiforthai) — last tiebreaker; neutral is not decisive
+ *   5. Neutral default
  *
- * Every response carries `signals` — the Transparent-AI contract: the UI can show
- * exactly why an emoji was chosen.
+ * The model service is OPTIONAL: if EMOTION_MODEL_URL is unset or the service
+ * is down, the cascade skips straight to SSense — the API works fully without it.
  *
- * Word lists are shared with the LINE bot's detectMood() (webhook.js keeps its own
- * copy until Phase 1 lands there); when editing lists, edit BOTH or migrate to
- * importing this module server-side.
+ * Every response carries `signals` — the Transparent-AI contract.
  */
 
 import { createHash } from "crypto";
@@ -139,6 +138,29 @@ async function ssensePolarity(text) {
   }
 }
 
+/** Fine-tuned model microservice (optional). Returns {emotion, confidence} or null. */
+const MODEL_URL = process.env.EMOTION_MODEL_URL || "";
+const MODEL_MIN_CONFIDENCE = 0.70;
+
+async function modelPredict(text) {
+  if (!MODEL_URL) return null;
+  try {
+    const res = await fetch(`${MODEL_URL}/predict`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text.slice(0, 4000) }),
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.emotion || typeof data?.confidence !== "number") return null;
+    if (data.confidence < MODEL_MIN_CONFIDENCE) return null;  // not decisive
+    return { emotion: data.emotion, confidence: data.confidence };
+  } catch {
+    return null;  // service down / timeout — cascade continues
+  }
+}
+
 // ── core classifier ────────────────────────────────────────────────────────────
 
 export async function classify(text, { source = "unknown", ssense = true } = {}) {
@@ -222,7 +244,20 @@ export async function classify(text, { source = "unknown", ssense = true } = {})
     });
   }
 
-  // 3. SSense tiebreaker when keywords found nothing
+  // 3. Fine-tuned model (localhost microservice) — decisive if confident
+  const mp = await modelPredict(raw);
+  if (mp) {
+    return respond(mp.emotion, {
+      engine: "wangchanberta",
+      keywords_matched: [],
+      negation_stripped: neg.stripped,
+      crisis_flag: crisisHit(raw),
+      source, started,
+      note: `keyword lists found nothing; model confidence ${mp.confidence.toFixed(2)} ≥ ${MODEL_MIN_CONFIDENCE}`,
+    });
+  }
+
+  // 4. SSense tiebreaker when neither keywords nor model decided
   if (ssense) {
     const polarity = await ssensePolarity(raw);
     if (polarity) {
@@ -243,7 +278,7 @@ export async function classify(text, { source = "unknown", ssense = true } = {})
     negation_stripped: neg.stripped,
     crisis_flag: false,
     source, started,
-    note: ssense ? "no decisive signal anywhere" : "no keyword signal; SSense skipped",
+    note: "no decisive signal anywhere (keywords/model/SSense)",
   });
 }
 

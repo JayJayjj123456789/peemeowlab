@@ -122,3 +122,12 @@ client/public/__manus__/version.json
 
 # Local test fixtures with real user data
 api/test/
+
+# ML training artifacts — heavy, reproducible
+ml/venv/
+ml/ckpt/
+ml/model/
+ml/model_v2/
+ml/data/
+ml/data_v2/
+ml/*.log
