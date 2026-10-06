@@ -6,7 +6,7 @@ import json, csv, sys, collections
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-MODEL = "/Users/thxdadloveyoumost/jaikrajok]/ml/model_v2"
+MODEL = "/Users/thxdadloveyoumost/jaikrajok]/ml/model_v3"
 DS = "/Users/thxdadloveyoumost/jaikrajok]/datasets"
 LABELS = ["positive", "neutral", "negative"]
 L2I = {l: i for i, l in enumerate(LABELS)}

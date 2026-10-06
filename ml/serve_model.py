@@ -14,7 +14,7 @@ import torch
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-MODEL = "/Users/thxdadloveyoumost/jaikrajok]/ml/model_v2"
+MODEL = "/Users/thxdadloveyoumost/jaikrajok]/ml/model_v3"
 HOST, PORT = "127.0.0.1", 8100
 LABELS = ["positive", "neutral", "negative"]
 
