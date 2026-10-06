@@ -1,0 +1,8 @@
+torch>=2.14
+transformers>=5.18
+datasets>=5.1
+sentencepiece
+tiktoken
+scikit-learn
+onnx
+onnxruntime
