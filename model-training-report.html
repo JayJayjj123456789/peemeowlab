@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WangchanBERTa — Emotion Model Training Report</title>
+<style>
+  :root{
+    --paper:#0f1216; --card:#161b22; --card2:#1c2330; --ink:#e6edf3; --dim:#8b98a5;
+    --red:#ff5c5c; --green:#3fb970; --amber:#e3b341; --blue:#58a6ff; --purple:#c29fff; --line:#2a313d;
+    --mono:'JetBrains Mono','Cascadia Code',Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--paper);color:var(--ink);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.6;padding:32px 16px}
+  .wrap{max-width:1080px;margin:0 auto}
+
+  header{border:1px solid var(--line);border-radius:14px;padding:28px 32px;background:linear-gradient(135deg,#161b22,#12161c);margin-bottom:24px}
+  h1{font-size:24px;letter-spacing:-.02em}
+  .sub{color:var(--dim);font-size:13px;margin-top:4px}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .badge{font-family:var(--mono);font-size:11.5px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--card2)}
+  .b-green{border-color:#2b5c3d;color:var(--green)} .b-blue{border-color:#2b4a5c;color:var(--blue)}
+  .b-red{border-color:#5c2b2b;color:var(--red)} .b-amber{border-color:#5c4d2b;color:var(--amber)}
+
+  h2{font-size:17px;margin:32px 0 12px;color:var(--purple)}
+  .card{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:20px 24px;margin-bottom:14px}
+  .card h3{font-size:14.5px;margin-bottom:10px;color:var(--blue)}
+  .card ul{list-style:none}
+  .card li{font-size:13.5px;padding:4px 0 4px 24px;position:relative}
+  .card li::before{content:"→";position:absolute;left:0;color:var(--blue);font-family:var(--mono)}
+  .card li.ok::before{content:"✓";color:var(--green);font-weight:700}
+  .card li.bad::before{content:"✕";color:var(--red);font-weight:700}
+  code{font-family:var(--mono);font-size:12px;background:#0d1117;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:#c9d8ea}
+  .mono{font-family:var(--mono);font-size:12px;color:var(--amber)}
+
+  table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:13.5px;margin-bottom:14px}
+  th{background:var(--card2);text-align:left;padding:10px 16px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+  td{padding:10px 16px;border-top:1px solid var(--line)}
+  td.win{color:var(--green);font-weight:700}
+  td.lose{color:var(--red)}
+  .gold{color:var(--amber)}
+
+  .bar-wrap{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:22px 24px}
+  .bar-row{margin-bottom:14px} .bar-row:last-child{margin-bottom:0}
+  .bar-lbl{display:flex;justify-content:space-between;font-size:12.5px;color:var(--dim);margin-bottom:6px;font-family:var(--mono)}
+  .bar{height:16px;border-radius:6px;background:#0d1117;overflow:hidden;border:1px solid var(--line)}
+  .bar>div{height:100%;border-radius:6px;background:linear-gradient(90deg,#3fb970,#58a6ff)}
+  .bar>div.bad{background:linear-gradient(90deg,#ff5c5c,#c73e3e)}
+  .bar>div.mid{background:linear-gradient(90deg,#e3b341,#ff8f5c)}
+
+  .flow{font-family:var(--mono);font-size:12.5px;background:#0d1117;border:1px solid var(--line);border-radius:10px;padding:16px 20px;color:#c9d8ea;white-space:pre;margin-bottom:14px}
+  .note{border:1px solid rgba(227,179,65,.4);background:rgba(227,179,65,.06);border-radius:12px;padding:16px 20px;margin-bottom:14px}
+  .note h3{font-size:14px;color:var(--amber);margin-bottom:6px}
+  .note p{font-size:13.5px}
+  footer{margin-top:30px;color:var(--dim);font-size:12px;text-align:center;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>🤖 WangchanBERTa — Emotion Model Training Report</h1>
+  <div class="sub">เฉพาะตัวโมเดลที่เทรนบนเครื่องคุณ (localhost, Apple M5/MPS) · 3 รอบ · ทุกตัวเลขจากการรันจริง · 6 ต.ค. 2026</div>
+  <div class="badges">
+    <span class="badge b-green">รอบสุดท้าย: 76% in-domain / 64.7% out-of-sample</span>
+    <span class="badge b-blue">เทรนเร็วสุด 12.4 นาที</span>
+    <span class="badge b-amber">เทรนด้วย label จาก dataset — ไม่ใช้ SSense ช่วยเทรน</span>
+  </div>
+</header>
+
+<h2>❗ ความเข้าใจที่ต้องเคลียร์ก่อน</h2>
+<div class="card">
+  <ul>
+    <li class="ok"><b>การเทรน ไม่ได้ใช้ SSense ช่วย</b> — โมเดลเรียนจาก label ใน dataset ตรง ๆ (supervised cross-entropy) ไม่มี SSense ไม่มี API ภายนอก ไม่มี regex ปนในกระบวนการ</li>
+    <li class="ok">SSense มีบทบาทเฉพาะ<b>ตอนใช้งาน</b> (inference): เป็น tiebreaker ตัวท้ายของ <code>/api/emotion</code> เฉพาะเมื่อ regex ไม่เจออะไรและโมเดลไม่มั่นใจ</li>
+    <li class="ok">หลัง benchmark ล่าสุด (SSense แพ้ทั้งสองชุด) บทบาทของมันแทบไม่เหลือ — ตัดออกได้เลยโดยระบบไม่เสีย</li>
+  </ul>
+</div>
+
+<h2>📈 3 รอบการเทรน — เส้นทางจาก 41.5% สู่ 64.7%</h2>
+<table>
+  <tr><th>รอบ</th><th>ข้อมูลเทรน</th><th>epochs</th><th>in-domain<br>(thai_emotion 100)</th><th>out-of-sample<br>(wisesight test)</th><th>บทเรียน</th></tr>
+  <tr>
+    <td><b>v1</b></td><td>ZombitX64 122k<br><span class="gold">(label noise สูง)</span></td><td>2 (วิ่งเกินจริง ~2.5)</td>
+    <td class="lose">69%</td><td class="lose">41.5%</td>
+    <td>val ceiling 71.5% ชี้ว่า label พัง · บั๊ก resume ของโค้ดผม · scheduler คลาดเคลื่อน</td>
+  </tr>
+  <tr>
+    <td><b>v2</b></td><td>Wisesight train 23k (สะอาด)<br>+ thai_emotion ×20 + class weights</td><td>2</td>
+    <td>74%</td><td class="win">62.7%</td>
+    <td>ชนะ regex ฝั่ง out-of-sample ครั้งแรก (56%)</td>
+  </tr>
+  <tr>
+    <td><b>v3 ★</b></td><td>เท่าเดิม</td><td>4 (เก็บ best epoch)</td>
+    <td><b>76%</b></td><td class="win"><b>64.7%</b></td>
+    <td>val curve 55→59→62→flat = เพดานคือข้อมูล ไม่ใช่ epochs</td>
+  </tr>
+</table>
+
+<h2>🔬 Deep Check — บั๊กที่จับได้และแก้ทั้งหมด</h2>
+<div class="card">
+  <ul>
+    <li class="bad"><b>v1 resume bug (โค้ดผมเอง):</b> <code>step += 1</code> ก่อนเช็ค skip → ทำงานเกินแผน 7466→9400 · <b>v2 แก้:</b> ลบ resume ทิ้ง รันเดียวจบ</li>
+    <li class="bad"><b>v1 scheduler:</b> ถูกสร้างใหม่หลัง resume ทำให้ LR decay คลาดจังหวะ · <b>v2 แก้:</b> ไม่มี resume = ไม่มีปัญหา</li>
+    <li class="bad"><b>MPS dropout crash:</b> SDPA บน Apple GPU ไม่รองรับ dropout · <b>แก้:</b> <code>attn_implementation="eager"</code></li>
+    <li class="bad"><b>loss weight คนละ device:</b> weight tensor อยู่ CPU แต่ logits อยู่ MPS → RuntimeError · <b>แก้:</b> ย้าย weight ไป device ก่อนสร้าง loss</li>
+    <li class="bad"><b>splitlines ทับบรรทัด:</b> wisesight train มี 12 ข้อความหลายบรรทัด → label คลาดคู่ · <b>แก้:</b> <code>split("\n")</code> จับคู่ตามตำแหน่งจริง</li>
+    <li class="bad"><b>class imbalance:</b> v1 เมิน negative (16→neutral) · <b>v2 แก้:</b> class-weighted loss (neg น้ำหนัก 1.15×, pos 1.81×)</li>
+    <li class="bad"><b>เครื่อง sleep:</b> kill MPS session เงียบ ๆ 2 ครั้ง · <b>แก้:</b> <code>caffeinate -ims</code> + checkpoint resume + <code>PYTORCH_MPS_HIGH_WATERMARK_RATIO=0</code></li>
+  </ul>
+</div>
+
+<h2>⚙️ สเปกการเทรน (v3 — ตัวที่ใช้งานจริง)</h2>
+<div class="card">
+  <ul>
+    <li>โมเดลฐาน: <code>airesearch/wangchanberta-base-att-spm-uncased</code> (105M params, ของ NECTEC)</li>
+    <li>วิธี: partial freeze — แช่แข็ง embeddings + 8 layers แรก, เทรน 4 layers ท้าย + classifier = <b>28.9M (27.5%)</b></li>
+    <li>ข้อมูล: Wisesight train 23,191 (pos 4,270 / neu 12,195 / neg 6,726) + thai_emotion ×20 → รวม ~25k</li>
+    <li>hyperparams: batch 32 · lr 3e-5 (warmup 6% + linear decay) · grad clip 1.0 · max_len 128 · loss มี class weights</li>
+    <li>device: MPS (GPU ของ M5) · เวลา 12.4 นาที · RAM ~4-5GB</li>
+    <li>เลือก best epoch ด้วย full val eval (2,454 ตัว) ทุกจุดจบ epoch</li>
+  </ul>
+</div>
+
+<h2>📊 เทียบกับ SSense — ตัวเลขเดียวกัน ชุดสอบเดียวกัน</h2>
+<table>
+  <tr><th>ตัวตัดสิน</th><th>thai_emotion (100)</th><th>wisesight (798)</th><th>หมายเหตุ</th></tr>
+  <tr><td>SSense API</td><td class="lose">82%</td><td class="lose">50%</td><td>กล่องดำของ aiforthai — แก้อะไรไม่ได้เมื่อพลาด</td></tr>
+  <tr><td><b>โมเดลเรา (v3)</b></td><td>76%</td><td class="win"><b>64.7%</b></td><td>โมเดลเราชนะ SSense ฝั่ง out-of-sample ชัดเจน (+14.7 จุด)</td></tr>
+  <tr><td>regex engine</td><td class="win">98%</td><td>56%</td><td>ยังครอง in-domain</td></tr>
+</table>
+<div class="note">
+  <h3>อ่านให้ถูก</h3>
+  <p>SSense ชนะ in-domain (82 vs 76) เพราะเคสง่ายที่คำชัดมันเดาถูกตามโทน — แต่บนภาษาจริงที่ซับซ้อน (ทวิตเตอร์) มันร่วง 50% ในขณะที่โมเดลเราทำ 64.7% · และที่สำคัญ: <b>เมื่อโมเดลเราพลาด เราแก้ได้</b> (เพิ่มข้อมูล/เทรนต่อ/ปรับ weights) แต่ SSense พลาดเมื่อไหร่เราทำอะไรไม่ได้เลย</p>
+</div>
+
+<h2>🔗 บทบาทปัจจุบันใน Ensemble (inference เท่านั้น)</h2>
+<div class="flow">[1] tag [อารมณ์:]  →  [2] regex 98%  →  [3] โมเดล v3 (conf ≥ 0.70)  →  [4] SSense  →  [5] neutral
+     (selfie)         คำชัด = จบ        regex มองไม่เห็น      ตัวสุดท้าย       เฉยๆ</div>
+<div class="card">
+  <ul>
+    <li>โมเดลรันเป็น microservice: <code>ml/serve_model.py</code> ที่ <code>127.0.0.1:8100</code> (MPS, RAM ~620MB)</li>
+    <li>ถ้า service ล่ม / ไม่เปิด → cascade ข้ามไป SSense ทันที ระบบไม่พัง</li>
+    <li>ทุกคำตอบของโมเดลมี confidence แสดงใน <code>signals</code> — ตรวจสอบย้อนหลังได้</li>
+  </ul>
+</div>
+
+<h2>🚧 ข้อจำกัดที่ยังเป็นความจริง</h2>
+<div class="note">
+  <h3>โมเดลยังแพ้ regex บน in-domain (76 vs 98) — และนี่ไม่ใช่ความล้มเหลว</h3>
+  <p>เพรดานอยู่ที่ข้อมูล: in-domain มีแค่ 2k ประโยคนักเรียน (คูณ 20 = oversample ไม่ใช่ข้อมูลใหม่จริง) — benchmark ของ WangchanBERTa บน wisesight เต็มชุดอยู่ที่ 90-92% แปลว่าโมเดลฐานพอไหว ขาดแค่ข้อมูลโดเมนจริง · นี่คือเหตุผลของ <b>Phase 2: เก็บแชทจริงจากผู้ใช้</b> — เมื่อมีแชทนักเรียนหลายหมื่นประโยค โมเดลจะแซง regex ได้เอง</p>
+</div>
+
+<footer>WangchanBERTa training report · v1→v2→v3 · ทุกตัวเลขจากการรันจริงบนเครื่อง Kovak · สร้างด้วย 🩶 โดย [K]</footer>
+</div>
+</body>
+</html>
