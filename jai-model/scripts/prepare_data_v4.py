@@ -10,8 +10,8 @@ v4 changes vs v3:
 import json, random, collections, os, csv
 
 random.seed(42)
-DS = "/Users/thxdadloveyoumost/jaikrajok]/datasets"
-V4 = "/Users/thxdadloveyoumost/jaikrajok]/ml/data_v4"
+DS = "/Users/thxdadloveyoumost/jjfolder/jaikrajok]/datasets"
+V4 = "/Users/thxdadloveyoumost/jjfolder/mymodel/data"
 os.makedirs(V4, exist_ok=True)
 
 WISE_MAP = {"pos": "positive", "neu": "neutral", "neg": "negative"}

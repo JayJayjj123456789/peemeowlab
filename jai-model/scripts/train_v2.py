@@ -18,8 +18,8 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, get_linear_schedule_with_warmup
 
 BASE = "airesearch/wangchanberta-base-att-spm-uncased"
-DATA = "/Users/thxdadloveyoumost/jaikrajok]/ml/data_v4"
-OUT = "/Users/thxdadloveyoumost/jaikrajok]/ml/model_v4"
+DATA = "/Users/thxdadloveyoumost/jjfolder/mymodel/data"
+OUT = "/Users/thxdadloveyoumost/jjfolder/mymodel/models/v6"
 LABELS = ["positive", "neutral", "negative"]
 L2I = {l: i for i, l in enumerate(LABELS)}
 
@@ -56,9 +56,9 @@ class DS(Dataset):
         enc = self.tok(t, truncation=True, max_length=self.max_len, padding="max_length", return_tensors="pt")
         return {"input_ids": enc["input_ids"][0], "attention_mask": enc["attention_mask"][0], "labels": torch.tensor(y)}
 
-train_ds = DS(f"{DATA}/train.jsonl", tok)
+train_ds = DS(f"{DATA}/train_v6.jsonl", tok)
 val_rows = []
-with open(f"{DATA}/val.jsonl") as f:
+with open(f"{DATA}/val_v6.jsonl") as f:
     for line in f:
         r = json.loads(line)
         val_rows.append((r["text"], L2I[r["label"]]))

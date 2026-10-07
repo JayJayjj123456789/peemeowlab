@@ -4,10 +4,10 @@ Throttled 1 req/sec to respect aiforthai rate limits.
 """
 import csv, json, time, urllib.request, urllib.parse, collections
 
-DS = "/Users/thxdadloveyoumost/jaikrajok]/datasets"
+DS = "/Users/thxdadloveyoumost/jjfolder/jaikrajok]/datasets"
 API_KEY = None  # read from .env
 
-for line in open("/Users/thxdadloveyoumost/jaikrajok]/.env"):
+for line in open("/Users/thxdadloveyoumost/jjfolder/jaikrajok]/.env"):
     if line.startswith("PATHUMMA_API_KEY="):
         API_KEY = line.split("=", 1)[1].strip()
     elif line.startswith("AIFORTHAI_API_KEY=") and not API_KEY:

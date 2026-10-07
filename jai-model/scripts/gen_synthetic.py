@@ -8,17 +8,17 @@ import json, time, urllib.request, pathlib, collections, os, sys
 
 # load key
 API_KEY = None
-for line in open("/Users/thxdadloveyoumost/jaikrajok]/.env"):
+for line in open("/Users/thxdadloveyoumost/jjfolder/jaikrajok]/.env"):
     if line.startswith("TOKENMIND_API_KEY="):
         API_KEY = line.split("=", 1)[1].strip()
         break
 assert API_KEY, "TOKENMIND_API_KEY not in .env"
 
-OUT = "/Users/thxdadloveyoumost/jaikrajok]/ml/data_v4"
+OUT = "/Users/thxdadloveyoumost/jjfolder/mymodel/data"
 os.makedirs(OUT, exist_ok=True)
 
 BASE_URL = None
-for line in open("/Users/thxdadloveyoumost/jaikrajok]/.env"):
+for line in open("/Users/thxdadloveyoumost/jjfolder/jaikrajok]/.env"):
     if line.startswith("TOKENMIND_BASE_URL="):
         BASE_URL = line.split("=", 1)[1].strip()
     elif line.startswith("THAILLM_BASE_URL="):
@@ -27,9 +27,9 @@ BASE_URL = BASE_URL or "https://tokenmind.abdul.in.th/v1"
 
 # reference examples from thai_emotion.csv for style anchoring
 style_ref = {}
-rows = list(csv.DictReader(open("/Users/thxdadloveyoumost/jaikrajok]/datasets/thai_emotion.csv", encoding="utf-8-sig"))) if False else None
+rows = list(csv.DictReader(open("/Users/thxdadloveyoumost/jjfolder/jaikrajok]/datasets/thai_emotion.csv", encoding="utf-8-sig"))) if False else None
 import csv
-rows = list(csv.DictReader(open("/Users/thxdadloveyoumost/jaikrajok]/datasets/thai_emotion.csv", encoding="utf-8-sig")))
+rows = list(csv.DictReader(open("/Users/thxdadloveyoumost/jjfolder/jaikrajok]/datasets/thai_emotion.csv", encoding="utf-8-sig")))
 for r in rows:
     style_ref.setdefault(r["label"], []).append(r["text"])
 

@@ -12,8 +12,8 @@ thai_emotion.csv ×20 oversample added to BOTH train and val (in-domain anchor).
 import csv, json, random, collections, os
 
 random.seed(42)
-DS = "/Users/thxdadloveyoumost/jaikrajok]/datasets"
-OUT = "/Users/thxdadloveyoumost/jaikrajok]/ml/data_v2"
+DS = "/Users/thxdadloveyoumost/jjfolder/jaikrajok]/datasets"
+OUT = "/Users/thxdadloveyoumost/jjfolder/jaikrajok]/ml/data_v2"
 os.makedirs(OUT, exist_ok=True)
 
 WISE_MAP = {"pos": "positive", "neu": "neutral", "neg": "negative"}

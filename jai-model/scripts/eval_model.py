@@ -6,8 +6,8 @@ import json, csv, sys, collections
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-MODEL = "/Users/thxdadloveyoumost/jaikrajok]/jai-model/models/v4-current"
-DS = "/Users/thxdadloveyoumost/jaikrajok]/datasets"  # ยังอ้างชุดสอบที่ datasets/
+MODEL = "/Users/thxdadloveyoumost/jjfolder/mymodel/models/v6"
+DS = "/Users/thxdadloveyoumost/jjfolder/jaikrajok]/datasets"  # ยังอ้างชุดสอบที่ datasets/
 LABELS = ["positive", "neutral", "negative"]
 L2I = {l: i for i, l in enumerate(LABELS)}
 
